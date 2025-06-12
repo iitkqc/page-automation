@@ -3,6 +3,8 @@ import gspread
 import json
 from datetime import datetime
 import base64 
+from datetime import datetime, timedelta
+import pytz
 
 # You'll need to share your Google Sheet with the service account email.
 
@@ -47,6 +49,7 @@ def get_latest_confessions_from_sheet(sheet_url, client, processed_ids_file="pro
         # Get all records as a list of dictionaries (using header row as keys)
         # Or as a list of lists if you prefer to access by index
         all_records = worksheet.get_all_values()
+        total_rows = len(all_records)
 
         if not all_records:
             print("No data found in the Google Sheet.")
@@ -56,57 +59,27 @@ def get_latest_confessions_from_sheet(sheet_url, client, processed_ids_file="pro
         header_row = all_records[0]
         data_rows = all_records[1:] # Skip header row
 
-        # Load processed IDs
-        processed_ids = set()
-        if os.path.exists(processed_ids_file):
-            try:
-                with open(processed_ids_file, 'r') as f:
-                    processed_ids = set(json.load(f))
-            except json.JSONDecodeError:
-                print(f"Warning: Could not parse {processed_ids_file}. Starting fresh.")
-                processed_ids = set()
-        
-        confessions = []
-        # Assuming ID is in the first column, text in the second. Adjust if needed.
-        # It's highly recommended to have a unique ID in your sheet. A timestamp can work.
-        # Or even better, if you use Google Forms to populate the sheet,
-        # the form response ID or submission timestamp makes a good unique ID.
-        
-        # Determine column indices dynamically if you have headers
-        try:
-            id_col_index = header_row.index("ID") if "ID" in header_row else 0 # Assuming 'ID' header or first column
-            text_col_index = header_row.index("Confession Text") if "Confession Text" in header_row else 1 # Assuming 'Confession Text' header or second column
-            timestamp_col_index = header_row.index("Timestamp") if "Timestamp" in header_row else None
-        except ValueError:
-            print("Warning: 'ID' or 'Confession Text' headers not found. Using default column indices (0 and 1).")
-            id_col_index = 0
-            text_col_index = 1
-            timestamp_col_index = None
+        ist = pytz.timezone('Asia/Kolkata')
+        current_time = ist.localize(datetime.now())
+        time_24_hours_ago = current_time - timedelta(hours=24)
 
-        for i, row in enumerate(data_rows):
-            if not row or len(row) <= max(id_col_index, text_col_index):
-                continue # Skip empty or malformed rows
+        filtered_rows = []
+        for i, row in enumerate(reversed(data_rows)):
+            if not row[0]:  # Skip rows with empty timestamps
+                continue
+            timestamp = ist.localize(datetime.strptime(row[0], '%d/%m/%Y %H:%M:%S'))
+            if timestamp < time_24_hours_ago:  # Stop if timestamp is too old
+                break
+            row.insert(0, total_rows - i)  # Append the row number for later reference
+            filtered_rows.append(row)
 
-            confession_id = row[id_col_index].strip()
-            confession_text = row[text_col_index].strip()
-            
-            # If you don't have a specific ID column, you can generate one
-            # e.g., by combining timestamp and row number
-            if not confession_id:
-                confession_id = f"row_{i+2}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}" # +2 for header and 0-indexing
-            
-            if confession_id and confession_text and confession_id not in processed_ids:
-                confessions.append({
-                    'id': confession_id,
-                    'text': confession_text,
-                    'row_num': i + 2 # Google Sheet row number (1-indexed, +1 for header)
-                })
-        return confessions
+        return filtered_rows
+    
     except Exception as e:
         print(f"Error reading Google Sheet: {e}")
         return []
 
-def mark_confession_as_processed(sheet_url, client, confession_id, row_num, processed_ids_file="processed_confessions.json"):
+def mark_confession_as_processed(sheet_url, client, confession_row, status):
     """
     Marks a confession as processed (e.g., by updating a column in the sheet).
     Also adds the ID to the local processed_confessions.json.
@@ -118,34 +91,13 @@ def mark_confession_as_processed(sheet_url, client, confession_id, row_num, proc
         # Option 1: Write "PROCESSED" to a new column (e.g., column C, index 2)
         # Ensure your sheet has this column or gspread will raise an error if out of bounds.
         # You might need to add a "Status" header to your sheet.
-        status_col_index = -1 # Find 'Status' column or pick a fixed one
-        headers = worksheet.row_values(1)
-        try:
-            status_col_index = headers.index("Status") + 1 # 1-indexed column number
-        except ValueError:
-            print("Warning: 'Status' header not found. Cannot update status column in sheet.")
-            # Fallback: Just update processed_ids.json
+        status_col_index = 3 # Find 'Status' column or pick a fixed one
             
-        if status_col_index != -1:
-            worksheet.update_cell(row_num, status_col_index, "PROCESSED")
-            print(f"Marked row {row_num} as PROCESSED in Google Sheet.")
-
-        # Option 2: Add to local processed_ids.json file
-        processed_ids = set()
-        if os.path.exists(processed_ids_file):
-            try:
-                with open(processed_ids_file, 'r') as f:
-                    processed_ids = set(json.load(f))
-            except json.JSONDecodeError:
-                pass # Will start fresh if file is corrupt
-        
-        processed_ids.add(confession_id)
-        with open(processed_ids_file, 'w') as f:
-            json.dump(list(processed_ids), f)
-        print(f"Added confession ID {confession_id} to processed_confessions.json.")
+        worksheet.update_cell(confession_row[0], status_col_index, status)
+        print(f"Marked row {confession_row[0]} as PROCESSED in Google Sheet.")
 
     except Exception as e:
-        print(f"Error marking confession {confession_id} as processed: {e}")
+        print(f"Error marking confession {confession_row[0]} as processed: {e}")
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
@@ -161,12 +113,12 @@ if __name__ == "__main__":
             sheets_client = get_sheets_client(CREDENTIALS_PATH)
             latest_confessions = get_latest_confessions_from_sheet(SHEET_URL, sheets_client)
             for conf in latest_confessions:
-                print(f"ID: {conf['id']}, Text: {conf['text'][:50]}..., Row: {conf['row_num']}")
+                print(f"Row: {conf[0]}, Timestamp: {conf[1]},  Text: {conf[2][:50]}...")
             
             # Example of marking processed (for first confession)
             if latest_confessions:
                 first_conf = latest_confessions[0]
-                mark_confession_as_processed(SHEET_URL, sheets_client, first_conf['id'], first_conf['row_num'])
+                mark_confession_as_processed(SHEET_URL, sheets_client, first_conf, 1)
 
         except Exception as e:
             print(f"An error occurred: {e}")
