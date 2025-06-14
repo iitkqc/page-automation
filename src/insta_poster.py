@@ -76,7 +76,7 @@ class ConfessionImageGenerator:
             
             for path in font_paths:
                 try:
-                    font_large = ImageFont.truetype(path, 42)
+                    font_large = ImageFont.truetype(path, 60)
                     font_medium = ImageFont.truetype(path, 32)
                     font_small = ImageFont.truetype(path, 24)
                     break
@@ -174,7 +174,7 @@ class ConfessionImageGenerator:
         lines = wrapped_text.split('\n')
         
         # Calculate text positioning
-        line_height = 50
+        line_height = 60
         total_text_height = len(lines) * line_height
         start_y = (self.img_height - total_text_height) // 2
         
@@ -209,12 +209,11 @@ class ConfessionImageGenerator:
                      font=font_small, fill=colors['text'])
         
         # Add watermark
-        if slide_num == 1:
-            watermark = "IITKQ.C"
-            watermark_bbox = draw.textbbox((0, 0), watermark, font=font_small)
-            watermark_width = watermark_bbox[2] - watermark_bbox[0]
-            draw.text(((self.img_width - watermark_width) // 2, 50), 
-                     watermark, font=font_medium, fill=colors['accent'])
+        watermark = "IITK QUICK CONFESSIONS"
+        watermark_bbox = draw.textbbox((0, 0), watermark, font=font_small)
+        watermark_width = watermark_bbox[2] - watermark_bbox[0]
+        draw.text(((self.img_width) // 2, 50), 
+                    watermark, font=font_medium, fill=colors['accent'], anchor="mm")
         
         # Save image
         filename = f"confession_{confession_id}_slide_{slide_num}.png"
