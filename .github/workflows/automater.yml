@@ -2,7 +2,7 @@ name: Confession Instagram Automator
 
 on:
   schedule:
-    - cron: '20 18 * * *'
+    - cron: '30 5 * * *'
   workflow_dispatch:
 
 jobs:
