@@ -64,7 +64,7 @@ class ConfessionImageGenerator:
             # Try different font paths
             font_paths = [
                 "/System/Library/Fonts/Arial.ttf",  # macOS
-                "/usr/share/fonts/truetype/arial.ttf",  # Linux
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
                 "C:/Windows/Fonts/arial.ttf",  # Windows
                 "arial.ttf"  # Local
             ]
