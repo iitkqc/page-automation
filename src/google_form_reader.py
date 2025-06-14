@@ -93,11 +93,11 @@ def mark_confession_as_processed(sheet_url, client, confession_row, status):
         # You might need to add a "Status" header to your sheet.
         status_col_index = 3 # Find 'Status' column or pick a fixed one
             
-        worksheet.update_cell(confession_row[0], status_col_index, status)
-        print(f"Marked row {confession_row[0]} as PROCESSED in Google Sheet.")
+        worksheet.update_cell(confession_row, status_col_index, status)
+        print(f"Marked row {confession_row} as PROCESSED in Google Sheet.")
 
     except Exception as e:
-        print(f"Error marking confession {confession_row[0]} as processed: {e}")
+        print(f"Error marking confession {confession_row} as processed: {e}")
 
 if __name__ == "__main__":
     from dotenv import load_dotenv

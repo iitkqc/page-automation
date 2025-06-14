@@ -209,7 +209,7 @@ class ConfessionImageGenerator:
         
         # Add watermark
         if slide_num == 1:
-            watermark = "Anonymous Confessions"
+            watermark = "IITKQ.C"
             watermark_bbox = draw.textbbox((0, 0), watermark, font=font_small)
             watermark_width = watermark_bbox[2] - watermark_bbox[0]
             draw.text(((self.img_width - watermark_width) // 2, 50), 
@@ -286,7 +286,7 @@ def create_instagram_carousel(image_urls: List[str], caption: str) -> str:
     """Create Instagram carousel post"""
     if not INSTAGRAM_PAGE_ID or not INSTAGRAM_ACCESS_TOKEN:
         print("Instagram API credentials not set.")
-        return None
+        return ""
     
     # For single image, use regular post
     if len(image_urls) == 1:
@@ -310,7 +310,7 @@ def create_instagram_carousel(image_urls: List[str], caption: str) -> str:
         }
         
         try:
-            response = requests.post(url, params=params)
+            response = requests.post(url, headers=headers, params=params)
             response.raise_for_status()
             media_id = response.json().get('id')
             media_ids.append(media_id)
@@ -392,7 +392,7 @@ def schedule_instagram_post(confession_data: Dict) -> bool:
     # Generate images (single or carousel)
     image_paths = generator.generate_confession_images(
         confession_data['text'], 
-        confession_data['id']
+        confession_data['row_num']
     )
     
     if not image_paths:
@@ -427,6 +427,8 @@ def schedule_instagram_post(confession_data: Dict) -> bool:
             return True
     
     return False
+
+# TODO: Implement post scheduling
 
 if __name__ == "__main__":
     from dotenv import load_dotenv

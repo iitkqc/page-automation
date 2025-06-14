@@ -1,0 +1,7 @@
+.env
+*.venv
+google_sheets*
+idea*
+*.png
+__pycache__
+*.pyc

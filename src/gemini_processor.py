@@ -9,6 +9,53 @@ def initialize_gemini():
         raise ValueError("GOOGLE_API_KEY environment variable not set.")
     genai.configure(api_key=api_key)
 
+def select_top_confessions(confessions, max_count=6):
+    """
+    Uses Gemini to select the top confessions based on creativity and potential reach.
+    Returns a list of the selected confessions.
+    """
+
+    # Initialize Gemini
+    initialize_gemini()
+    model = genai.GenerativeModel('gemini-1.5-flash')
+
+    # Prepare the prompt with all confessions
+    confessions_text = "\n\n".join([
+        f"Confession {i+1}:\n{conf['text']}\nSentiment: {conf['sentiment']}"
+        for i, conf in enumerate(confessions)
+    ])
+
+    prompt = f"""
+    You are an expert social media content curator for IIT Kanpur. Your task is to select the most engaging confessions from the list below.
+
+    Selection criteria:
+    1. Creativity and originality
+    2. Strong relevance to IITK student life
+    3. Humor, relatability, or emotional impact
+    4. High potential for engagement, discussion, or virality
+    5. Diversity in tone and topic (e.g., mix of funny, serious, and relatable confessions)
+
+    Review the following confessions:
+
+    {confessions_text}
+
+    Select up to {max_count} confessions that best fit the criteria above. 
+    Respond ONLY with a JSON array of the 1-based indices of your selections, e.g.: [2, 5, 1, 4]
+    """
+
+    try:
+        response = model.generate_content(prompt)
+        selected_indices = json.loads(response.text.strip().replace('```json\n', '').replace('\n```', ''))
+        
+        # Convert 1-based indices to 0-based and get selected confessions
+        selected_confessions = [confessions[i-1] for i in selected_indices]
+        return selected_confessions
+
+    except Exception as e:
+        print(f"Error selecting top confessions: {e}")
+        # Fallback: return first max_count confessions
+        return confessions[:max_count]
+
 def moderate_and_shortlist_confession(confession_text):
     """
     Uses Gemini 1.5 Flash to moderate for hate speech and determine suitability.
