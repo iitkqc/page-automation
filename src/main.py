@@ -8,6 +8,7 @@ import base64
 from google_form_reader import get_sheets_client, get_latest_confessions_from_sheet, mark_confession_as_processed
 from gemini_processor import moderate_and_shortlist_confession, select_top_confessions
 from insta_poster import schedule_instagram_post # Updated import to use the new function
+from utils import delete_all_cloudinary_assets
 
 # --- Configuration (loaded from environment variables in GitHub Actions) ---
 SHEET_URL = os.getenv("GOOGLE_SHEET_URL")
@@ -108,3 +109,4 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv() # Load environment variables for local testing
     main()
+    delete_all_cloudinary_assets()

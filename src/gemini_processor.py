@@ -9,7 +9,7 @@ def initialize_gemini():
         raise ValueError("GOOGLE_API_KEY environment variable not set.")
     genai.configure(api_key=api_key)
 
-def select_top_confessions(confessions, max_count=6):
+def select_top_confessions(confessions, max_count=4):
     """
     Uses Gemini to select the top confessions based on creativity and potential reach.
     Returns a list of the selected confessions.
