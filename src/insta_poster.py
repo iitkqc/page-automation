@@ -68,6 +68,7 @@ class ConfessionImageGenerator:
                 "C:/Windows/Fonts/arial.ttf",  # Windows
                 "arial.ttf"  # Local
             ]
+            # TODO: Add hindi fonts, hindi fonts are not working now
             
             font_large = None
             font_medium = None
@@ -438,14 +439,16 @@ if __name__ == "__main__":
     short_confession = {
         'id': 'short_001',
         'text': "I secretly love pineapple on pizza and I'm tired of pretending I don't!",
-        'summary_caption': "🍕 Food confession time! #confessions #foodie #unpopularopinion"
+        'summary_caption': "🍕 Food confession time! #confessions #foodie #unpopularopinion",
+        'row_num': 1
     }
     
     # Test with long text that will create a carousel
     long_confession = {
         'id': 'long_001',
         'text': """I've been living a double life for the past three years. By day, I'm a corporate lawyer working 80-hour weeks in a prestigious firm. Everyone thinks I'm this successful, put-together person. But by night, I'm a street artist creating murals in abandoned buildings around the city. I've never told anyone, not even my closest friends or family. The art world knows me by a completely different name, and I've even sold some pieces to galleries. The crazy part is that some of my corporate colleagues have unknowingly bought my art for their offices. I'm torn between two worlds - the financial security of my legal career and the creative fulfillment of my art. Sometimes I wonder what would happen if these two worlds collided. Would I lose everything I've worked for, or would people finally see the real me? I dream of the day I can just be an artist full-time, but the fear of disappointing everyone and losing my stable income keeps me trapped in this double life. It's exhausting pretending to be someone I'm not during the day, but I don't know how to break free from this cycle.""",
-        'summary_caption': "🎨 Living a double life between corporate world and street art... #confessions #artist #doublelife #authentic #dreams"
+        'summary_caption': "🎨 Living a double life between corporate world and street art... #confessions #artist #doublelife #authentic #dreams",
+        'row_num': 2
     }
     
     print("Testing short confession...")
