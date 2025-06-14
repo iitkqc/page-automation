@@ -1,137 +1,372 @@
 import requests
 import os
 import time
-from PIL import Image, ImageDraw, ImageFont # For simple image generation
-import textwrap # For wrapping text on images
+import cloudinary
+import cloudinary.uploader
+from PIL import Image, ImageDraw, ImageFont
+import textwrap
+import math
+from typing import List, Dict, Tuple
 
-# --- Configuration (use GitHub Secrets for these) ---
-FB_GRAPH_API_BASE = "https://graph.facebook.com/v19.0/" # Or the latest version
+# --- Configuration ---
+FB_GRAPH_API_BASE = "https://graph.instagram.com/v21.0"
 INSTAGRAM_PAGE_ID = os.getenv("INSTAGRAM_PAGE_ID")
-INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN") # Page Access Token
+INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN")
+
+# Cloudinary configuration
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET")
+)
+
 IMAGE_OUTPUT_DIR = "generated_images"
 
 if not os.path.exists(IMAGE_OUTPUT_DIR):
     os.makedirs(IMAGE_OUTPUT_DIR)
 
-def generate_confession_image(confession_text, filename="confession.png"):
-    """
-    Generates a simple image with the confession text.
-    You might want to use a more sophisticated image generation library or service.
-    """
-    img_width, img_height = 1080, 1080 # Standard Instagram square
-    background_color = (240, 240, 240) # Light grey
-    text_color = (30, 30, 30) # Dark grey
-
-    img = Image.new('RGB', (img_width, img_height), color=background_color)
-    d = ImageDraw.Draw(img)
-
-    # Load a font (ensure you have one available on your runner, or provide it)
-    try:
-        font_path = "arial.ttf" # Example font. You might need to include a .ttf file in your repo
-        font = ImageFont.truetype(font_path, 40)
-    except IOError:
-        font = ImageFont.load_default()
-        print("Warning: arial.ttf not found, using default font. Image might look different.")
-
-    margin = 80
-    max_width = img_width - 2 * margin
-
-    # Wrap text
-    wrapped_text = textwrap.fill(confession_text, width=int(max_width / (font.getbbox("W")[2] - font.getbbox("W")[0]) * 1.5)) # Estimate width based on W
-
-    # Calculate text size and position
-    # text_bbox = d.textbbox((0,0), wrapped_text, font=font) # This is newer, requires Pillow 9.2+
-    # text_width, text_height = text_bbox[2] - text_bbox[0], text_bbox[3] - text_bbox[1]
+class ConfessionImageGenerator:
+    def __init__(self):
+        self.img_width = 1080
+        self.img_height = 1080
+        self.margin = 80
+        self.line_spacing = 15
+        self.max_chars_per_slide = 400  # Adjust based on readability
+        
+        # Color schemes for variety
+        self.color_schemes = [
+            {
+                'bg_start': (240, 240, 245),
+                'bg_end': (225, 225, 235),
+                'text': (40, 40, 50),
+                'accent': (120, 120, 140),
+                'shadow': (200, 200, 210)
+            },
+            {
+                'bg_start': (245, 240, 235),
+                'bg_end': (235, 225, 215),
+                'text': (60, 40, 30),
+                'accent': (140, 100, 80),
+                'shadow': (210, 200, 190)
+            },
+            {
+                'bg_start': (235, 245, 240),
+                'bg_end': (215, 235, 225),
+                'text': (30, 50, 40),
+                'accent': (80, 140, 100),
+                'shadow': (190, 210, 200)
+            }
+        ]
     
-    # Older way for text size
-    dummy_draw = ImageDraw.Draw(Image.new('RGB', (1,1)))
-    lines = wrapped_text.split('\n')
-    line_heights = [dummy_draw.textbbox((0,0), line, font=font)[3] - dummy_draw.textbbox((0,0), line, font=font)[1] for line in lines]
-    text_height = sum(line_heights)
+    def load_fonts(self):
+        """Load fonts with fallback options"""
+        try:
+            # Try different font paths
+            font_paths = [
+                "/System/Library/Fonts/Arial.ttf",  # macOS
+                "/usr/share/fonts/truetype/arial.ttf",  # Linux
+                "C:/Windows/Fonts/arial.ttf",  # Windows
+                "arial.ttf"  # Local
+            ]
+            
+            font_large = None
+            font_medium = None
+            font_small = None
+            
+            for path in font_paths:
+                try:
+                    font_large = ImageFont.truetype(path, 42)
+                    font_medium = ImageFont.truetype(path, 32)
+                    font_small = ImageFont.truetype(path, 24)
+                    break
+                except:
+                    continue
+            
+            if not font_large:
+                font_large = ImageFont.load_default()
+                font_medium = ImageFont.load_default()
+                font_small = ImageFont.load_default()
+                
+            return font_large, font_medium, font_small
+            
+        except Exception as e:
+            print(f"Font loading error: {e}")
+            default_font = ImageFont.load_default()
+            return default_font, default_font, default_font
     
-    y_text = (img_height - text_height) / 2 # Center vertically
+    def create_gradient_background(self, colors: Dict) -> Image.Image:
+        """Create a subtle gradient background"""
+        img = Image.new('RGB', (self.img_width, self.img_height))
+        draw = ImageDraw.Draw(img)
+        
+        # Create vertical gradient
+        for y in range(self.img_height):
+            # Calculate gradient ratio
+            ratio = y / self.img_height
+            
+            # Interpolate colors
+            r = int(colors['bg_start'][0] * (1 - ratio) + colors['bg_end'][0] * ratio)
+            g = int(colors['bg_start'][1] * (1 - ratio) + colors['bg_end'][1] * ratio)
+            b = int(colors['bg_start'][2] * (1 - ratio) + colors['bg_end'][2] * ratio)
+            
+            draw.line([(0, y), (self.img_width, y)], fill=(r, g, b))
+        
+        return img
+    
+    def split_text_into_slides(self, text: str) -> List[str]:
+        """Split long text into readable slides"""
+        if len(text) <= self.max_chars_per_slide:
+            return [text]
+        
+        # Split by sentences first
+        sentences = text.replace('!', '.').replace('?', '.').split('.')
+        sentences = [s.strip() for s in sentences if s.strip()]
+        
+        slides = []
+        current_slide = ""
+        
+        for sentence in sentences:
+            # If adding this sentence would exceed limit, start new slide
+            if len(current_slide) + len(sentence) + 2 > self.max_chars_per_slide:
+                if current_slide:
+                    slides.append(current_slide.strip())
+                    current_slide = sentence + "."
+                else:
+                    # Single sentence is too long, force split
+                    words = sentence.split()
+                    temp_slide = ""
+                    for word in words:
+                        if len(temp_slide) + len(word) + 1 > self.max_chars_per_slide:
+                            if temp_slide:
+                                slides.append(temp_slide.strip())
+                                temp_slide = word
+                            else:
+                                # Single word too long, truncate
+                                slides.append(word[:self.max_chars_per_slide-3] + "...")
+                                temp_slide = ""
+                        else:
+                            temp_slide += " " + word if temp_slide else word
+                    if temp_slide:
+                        current_slide = temp_slide + "."
+            else:
+                current_slide += " " + sentence + "." if current_slide else sentence + "."
+        
+        if current_slide:
+            slides.append(current_slide.strip())
+        
+        return slides
+    
+    def create_slide_image(self, text: str, slide_num: int, total_slides: int, 
+                          colors: Dict, confession_id: str) -> str:
+        """Create a single slide image"""
+        font_large, font_medium, font_small = self.load_fonts()
+        
+        # Create background
+        img = self.create_gradient_background(colors)
+        draw = ImageDraw.Draw(img)
+        
+        # Add decorative elements
+        self.add_decorative_elements(draw, colors)
+        
+        # Wrap text for better readability
+        wrapped_text = textwrap.fill(text, width=35, break_long_words=False)
+        lines = wrapped_text.split('\n')
+        
+        # Calculate text positioning
+        line_height = 50
+        total_text_height = len(lines) * line_height
+        start_y = (self.img_height - total_text_height) // 2
+        
+        # Draw text with shadow effect
+        for i, line in enumerate(lines):
+            # Calculate x position for center alignment
+            text_bbox = draw.textbbox((0, 0), line, font=font_large)
+            text_width = text_bbox[2] - text_bbox[0]
+            x = (self.img_width - text_width) // 2
+            y = start_y + (i * line_height)
+            
+            # Draw shadow
+            draw.text((x + 2, y + 2), line, font=font_large, fill=colors['shadow'])
+            # Draw main text
+            draw.text((x, y), line, font=font_large, fill=colors['text'])
+        
+        # Add slide indicator
+        if total_slides > 1:
+            indicator_text = f"{slide_num}/{total_slides}"
+            indicator_bbox = draw.textbbox((0, 0), indicator_text, font=font_small)
+            indicator_width = indicator_bbox[2] - indicator_bbox[0]
+            
+            # Draw indicator background
+            indicator_x = self.img_width - indicator_width - 30
+            indicator_y = self.img_height - 60
+            draw.rectangle([
+                (indicator_x - 10, indicator_y - 5),
+                (indicator_x + indicator_width + 10, indicator_y + 25)
+            ], fill=colors['accent'], outline=colors['text'])
+            
+            draw.text((indicator_x, indicator_y), indicator_text, 
+                     font=font_small, fill=colors['text'])
+        
+        # Add watermark
+        if slide_num == 1:
+            watermark = "Anonymous Confessions"
+            watermark_bbox = draw.textbbox((0, 0), watermark, font=font_small)
+            watermark_width = watermark_bbox[2] - watermark_bbox[0]
+            draw.text(((self.img_width - watermark_width) // 2, 50), 
+                     watermark, font=font_medium, fill=colors['accent'])
+        
+        # Save image
+        filename = f"confession_{confession_id}_slide_{slide_num}.png"
+        image_path = os.path.join(IMAGE_OUTPUT_DIR, filename)
+        img.save(image_path, quality=95, optimize=True)
+        
+        return image_path
+    
+    def add_decorative_elements(self, draw: ImageDraw.Draw, colors: Dict):
+        """Add subtle decorative elements"""
+        # Add corner decorations
+        corner_size = 40
+        
+        # Top corners
+        draw.arc([(20, 20), (20 + corner_size, 20 + corner_size)], 
+                start=180, end=270, fill=colors['accent'], width=3)
+        draw.arc([(self.img_width - 20 - corner_size, 20), 
+                 (self.img_width - 20, 20 + corner_size)], 
+                start=270, end=0, fill=colors['accent'], width=3)
+        
+        # Bottom corners
+        draw.arc([(20, self.img_height - 20 - corner_size), 
+                 (20 + corner_size, self.img_height - 20)], 
+                start=90, end=180, fill=colors['accent'], width=3)
+        draw.arc([(self.img_width - 20 - corner_size, self.img_height - 20 - corner_size), 
+                 (self.img_width - 20, self.img_height - 20)], 
+                start=0, end=90, fill=colors['accent'], width=3)
+    
+    def generate_confession_images(self, confession_text: str, confession_id: str) -> List[str]:
+        """Generate single or carousel images based on text length"""
+        # Choose color scheme based on confession ID for consistency
+        color_scheme = self.color_schemes[hash(confession_id) % len(self.color_schemes)]
+        
+        # Split text into slides
+        slides = self.split_text_into_slides(confession_text)
+        
+        print(f"Generating {len(slides)} slide(s) for confession {confession_id}")
+        
+        image_paths = []
+        for i, slide_text in enumerate(slides, 1):
+            image_path = self.create_slide_image(
+                slide_text, i, len(slides), color_scheme, confession_id
+            )
+            image_paths.append(image_path)
+        
+        return image_paths
 
-    # Draw each line of text
-    for line in lines:
-        line_width = d.textbbox((0,0), line, font=font)[2] - d.textbbox((0,0), line, font=font)[0]
-        x_text = (img_width - line_width) / 2 # Center horizontally
-        d.text((x_text, y_text), line, font=font, fill=text_color)
-        y_text += dummy_draw.textbbox((0,0), line, font=font)[3] - dummy_draw.textbbox((0,0), line, font=font)[1] # Move to next line
+def upload_images_to_cloudinary(image_paths: List[str], confession_id: str) -> List[str]:
+    """Upload multiple images to Cloudinary and return URLs"""
+    public_urls = []
+    
+    for i, image_path in enumerate(image_paths, 1):
+        try:
+            public_id = f"confessions/confession_{confession_id}_slide_{i}"
+            response = cloudinary.uploader.upload(
+                image_path,
+                public_id=public_id,
+                overwrite=True,
+                resource_type="image"
+            )
+            public_urls.append(response['secure_url'])
+            print(f"Uploaded slide {i} to Cloudinary: {response['secure_url']}")
+        except Exception as e:
+            print(f"Error uploading slide {i} to Cloudinary: {e}")
+            return []
+    
+    return public_urls
 
-    image_path = os.path.join(IMAGE_OUTPUT_DIR, filename)
-    img.save(image_path)
-    print(f"Generated image: {image_path}")
-    return image_path
-
-def upload_image_to_instagram(image_path, caption):
-    """
-    Uploads an image to Instagram via the Graph API.
-    Returns the media_id if successful, None otherwise.
-    """
+def create_instagram_carousel(image_urls: List[str], caption: str) -> str:
+    """Create Instagram carousel post"""
     if not INSTAGRAM_PAGE_ID or not INSTAGRAM_ACCESS_TOKEN:
         print("Instagram API credentials not set.")
         return None
+    
+    # For single image, use regular post
+    if len(image_urls) == 1:
+        return create_single_instagram_post(image_urls[0], caption)
+    
+    # Create carousel container
+    url = f"{FB_GRAPH_API_BASE}/me/media"
+    
+    # First, create media objects for each image
+    media_ids = []
+    for image_url in image_urls:
 
-    # Step 1: Upload the image to get a container ID
-    url = f"{FB_GRAPH_API_BASE}{INSTAGRAM_PAGE_ID}/media"
+        headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {INSTAGRAM_ACCESS_TOKEN}"
+        }
+        params = {
+            'image_url': image_url,
+            'caption': caption,
+            'is_carousel_item': 'true',
+        }
+        
+        try:
+            response = requests.post(url, params=params)
+            response.raise_for_status()
+            media_id = response.json().get('id')
+            media_ids.append(media_id)
+            print(f"Created carousel item with ID: {media_id}")
+        except requests.exceptions.RequestException as e:
+            print(f"Error creating carousel item: {e}")
+            return ""
     
-    # For local image upload, you'd typically need to host it publicly
-    # or use a multi-part form data upload, which is more complex with requests.
-    # The simplest way for GitHub Actions is to upload to a temporary public URL (e.g., imgur, AWS S3)
-    # or to make the image accessible from the GitHub Actions runner.
-    # For this boilerplate, we'll assume the image is locally accessible by the runner.
-    # The Instagram API requires an image_url.
-    # For GitHub Actions, you'd need to upload this image to a publicly accessible URL (e.g., a simple web server
-    # within the action, or an S3 bucket) and provide that URL.
-    
-    # Placeholder: In a real scenario, `image_url` would be a public URL
-    # For demonstration, we'll simulate a public URL for now.
-    # You'd need a separate step in your workflow to make the image public.
-    # E.g., push to a GitHub Pages branch, or upload to a CDN.
-    
-    # For simplicity of this boilerplate, we'll skip the actual hosting for now and assume it's available
-    # However, for a real project, this is a critical step!
-    print(f"To publish, the image needs to be publicly accessible at a URL.")
-    print(f"Simulating public URL for: {image_path}")
-    
-    # A common approach is to upload to a temporary storage or CDN.
-    # Let's mock a success for boilerplate.
-    
-    # Example using a dummy public URL for local testing:
-    # In a real GitHub Action, you'd have uploaded the image to a publicly accessible place first.
-    # For instance, a simple way is to have a GitHub Pages branch and push generated images there.
-    # Then the URL would be: `https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPO_NAME/generated_images/confession.png`
-    
-    # FOR DEMO PURPOSES: This will FAIL in real Graph API without a public URL.
-    # Replace this with your actual public image URL
-    mock_image_url = "https://example.com/your_publicly_hosted_image.png" 
-    
-    params = {
-        'image_url': mock_image_url, 
+    # Create carousel container
+    carousel_params = {
+        'media_type': 'CAROUSEL',
+        'children': ','.join(media_ids),
         'caption': caption,
         'access_token': INSTAGRAM_ACCESS_TOKEN
     }
     
     try:
-        response = requests.post(url, params=params)
-        response.raise_for_status() # Raise an exception for HTTP errors
-        media_container_id = response.json().get('id')
+        response = requests.post(url, params=carousel_params)
+        response.raise_for_status()
+        carousel_id = response.json().get('id')
+        print(f"Created carousel container with ID: {carousel_id}")
+        return carousel_id
+    except requests.exceptions.RequestException as e:
+        print(f"Error creating carousel container: {e}")
+        print(f"Response: {response.text}")
+        return ""
+
+def create_single_instagram_post(image_url: str, caption: str) -> str:
+    """Create single Instagram post"""
+    url = f"{FB_GRAPH_API_BASE}/{INSTAGRAM_PAGE_ID}/media"
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {INSTAGRAM_ACCESS_TOKEN}"
+    }
+    data = {
+        'image_url': image_url,
+        'caption': caption
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        media_container_id = response.json().get('id', '')
         print(f"Media container created with ID: {media_container_id}")
         return media_container_id
     except requests.exceptions.RequestException as e:
         print(f"Error creating media container: {e}")
-        print(f"Response: {response.text}")
-        return None
+        return ""
 
-def publish_instagram_post(media_container_id):
-    """
-    Publishes the media container to Instagram.
-    """
+def publish_instagram_post(media_container_id: str) -> bool:
+    """Publish the media container to Instagram"""
     if not INSTAGRAM_PAGE_ID or not INSTAGRAM_ACCESS_TOKEN:
-        print("Instagram API credentials not set.")
         return False
 
-    url = f"{FB_GRAPH_API_BASE}{INSTAGRAM_PAGE_ID}/media_publish"
+    url = f"{FB_GRAPH_API_BASE}/{INSTAGRAM_PAGE_ID}/media_publish"
     params = {
         'creation_id': media_container_id,
         'access_token': INSTAGRAM_ACCESS_TOKEN
@@ -145,55 +380,76 @@ def publish_instagram_post(media_container_id):
         return True
     except requests.exceptions.RequestException as e:
         print(f"Error publishing post: {e}")
-        print(f"Response: {response.text}")
         return False
 
-def schedule_instagram_post(confession_data):
-    """
-    Orchestrates the image generation and Instagram publishing.
-    """
+def schedule_instagram_post(confession_data: Dict) -> bool:
+    """Main function to process confession and post to Instagram"""
     print(f"Processing confession: {confession_data['id']}")
     
-    # Generate image
-    image_filename = f"confession_{confession_data['id']}.png"
-    image_path = generate_confession_image(confession_data['text'], image_filename)
+    # Initialize image generator
+    generator = ConfessionImageGenerator()
     
-    if not image_path:
-        print("Failed to generate image.")
+    # Generate images (single or carousel)
+    image_paths = generator.generate_confession_images(
+        confession_data['text'], 
+        confession_data['id']
+    )
+    
+    if not image_paths:
+        print("Failed to generate images.")
         return False
-
-    # This part requires the image to be publicly accessible.
-    # For a GitHub Action, you'd need to push `image_path` to a public URL (e.g., GitHub Pages, S3).
-    # For this boilerplate, the `upload_image_to_instagram` function has a placeholder for `mock_image_url`.
-    # You MUST replace this with a real public URL where your generated image is hosted.
     
-    media_container_id = upload_image_to_instagram(image_path, confession_data['summary_caption'])
+    # Upload to Cloudinary
+    public_urls = upload_images_to_cloudinary(image_paths, confession_data['id'])
+    if not public_urls:
+        print("Failed to upload images to Cloudinary")
+        return False
+    
+    # Create Instagram post (single or carousel)
+    if len(public_urls) == 1:
+        media_container_id = create_single_instagram_post(public_urls[0], confession_data['summary_caption'])
+    else:
+        media_container_id = create_instagram_carousel(public_urls, confession_data['summary_caption'])
+    
     if media_container_id:
-        # Instagram API typically publishes immediately once the container is ready.
-        # There's no direct "schedule for later" in the basic Graph API, you schedule the *run* of your script.
-        # However, for a confession page, you'd likely want to publish as soon as a good one is found.
-        # If you truly need future scheduling, you'd have to manage that logic in your script
-        # (e.g., store the container ID and publish it with a separate GitHub Action at a later time).
+        print("Waiting for Instagram to process media...")
+        time.sleep(20)  # Give Instagram time to process
         
-        # For simplicity, we publish immediately after container creation.
-        print("Waiting a few seconds for media container to process...")
-        time.sleep(10) # Give Instagram some time to process the container
         success = publish_instagram_post(media_container_id)
         if success:
             print(f"Successfully posted confession {confession_data['id']} to Instagram!")
-            # Optionally, you might want to delete the local image file after successful upload.
-            # os.remove(image_path)
+            # Clean up local images
+            for image_path in image_paths:
+                try:
+                    os.remove(image_path)
+                except:
+                    pass
             return True
+    
     return False
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
-    # Dummy data for testing
-    dummy_confession = {
-        'id': 'test_123',
-        'submitted_at': '2025-06-01T12:00:00Z',
-        'text': "This is a dummy confession to test the Instagram posting functionality. I hope it works!",
-        'summary_caption': "A test confession for automation."
+    
+    # Test with short text
+    short_confession = {
+        'id': 'short_001',
+        'text': "I secretly love pineapple on pizza and I'm tired of pretending I don't!",
+        'summary_caption': "🍕 Food confession time! #confessions #foodie #unpopularopinion"
     }
-    schedule_instagram_post(dummy_confession)
+    
+    # Test with long text that will create a carousel
+    long_confession = {
+        'id': 'long_001',
+        'text': """I've been living a double life for the past three years. By day, I'm a corporate lawyer working 80-hour weeks in a prestigious firm. Everyone thinks I'm this successful, put-together person. But by night, I'm a street artist creating murals in abandoned buildings around the city. I've never told anyone, not even my closest friends or family. The art world knows me by a completely different name, and I've even sold some pieces to galleries. The crazy part is that some of my corporate colleagues have unknowingly bought my art for their offices. I'm torn between two worlds - the financial security of my legal career and the creative fulfillment of my art. Sometimes I wonder what would happen if these two worlds collided. Would I lose everything I've worked for, or would people finally see the real me? I dream of the day I can just be an artist full-time, but the fear of disappointing everyone and losing my stable income keeps me trapped in this double life. It's exhausting pretending to be someone I'm not during the day, but I don't know how to break free from this cycle.""",
+        'summary_caption': "🎨 Living a double life between corporate world and street art... #confessions #artist #doublelife #authentic #dreams"
+    }
+    
+    print("Testing short confession...")
+    schedule_instagram_post(short_confession)
+    
+    print("\n" + "="*50 + "\n")
+    
+    print("Testing long confession (carousel)...")
+    schedule_instagram_post(long_confession)
