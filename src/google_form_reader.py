@@ -59,16 +59,10 @@ def get_latest_confessions_from_sheet(sheet_url, client, processed_ids_file="pro
         header_row = all_records[0]
         data_rows = all_records[1:] # Skip header row
 
-        ist = pytz.timezone('Asia/Kolkata')
-        current_time = ist.localize(datetime.now())
-        time_24_hours_ago = current_time - timedelta(hours=24)
-
         filtered_rows = []
         for i, row in enumerate(reversed(data_rows)):
-            if not row[0]:  # Skip rows with empty timestamps
-                continue
-            timestamp = ist.localize(datetime.strptime(row[0], '%d/%m/%Y %H:%M:%S'))
-            if timestamp < time_24_hours_ago:  # Stop if timestamp is too old
+
+            if row[2] != '':  # Stop if timestamp is too old
                 break
             row.insert(0, total_rows - i)  # Append the row number for later reference
             filtered_rows.append(row)

@@ -45,6 +45,9 @@ def main():
     # Read confessions from the sheet, using the PROCESSED_CONFESSIONS_FILE to avoid duplicates
     new_confessions = get_latest_confessions_from_sheet(SHEET_URL, sheets_client, PROCESSED_CONFESSIONS_FILE)
     print(f"Found {len(new_confessions)} new confessions from sheet.")
+    if not new_confessions:
+        print("No new confessions found in the Google Sheet.")
+        return
 
     shortlisted_posts = []
     
@@ -67,6 +70,9 @@ def main():
             print(f"Confession deemed UNSAFE: {gemini_result['rejection_reason']}")
 
     print(f"\nFound {len(shortlisted_posts)} safe confessions.")
+    if not shortlisted_posts:
+        print("No safe confessions found for posting.")
+        return
 
   
     print("Selecting top 6 confessions based on creativity and potential reach...")
