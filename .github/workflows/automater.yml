@@ -2,7 +2,8 @@ name: Confession Instagram Automator
 
 on:
   schedule:
-    - cron: '45 16 * * *'
+    - cron: '50 17 * * *'
+  workflow_dispatch:
 
 jobs:
   automate_confessions:
@@ -36,4 +37,9 @@ jobs:
         CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
         CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
       run: uv run python src/main.py
+
+    - name: Cleanup generated_images and credentials
+      run: |
+        rm -rf generated_images
+        rm -f google_sheets_credentials.json
 
