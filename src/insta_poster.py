@@ -31,31 +31,6 @@ class ConfessionImageGenerator:
         self.margin = 80
         self.line_spacing = 15
         self.max_chars_per_slide = 400  # Adjust based on readability
-        
-        # Color schemes for variety
-        self.color_schemes = [
-            {
-                'bg_start': (240, 240, 245),
-                'bg_end': (225, 225, 235),
-                'text': (40, 40, 50),
-                'accent': (120, 120, 140),
-                'shadow': (200, 200, 210)
-            },
-            {
-                'bg_start': (245, 240, 235),
-                'bg_end': (235, 225, 215),
-                'text': (60, 40, 30),
-                'accent': (140, 100, 80),
-                'shadow': (210, 200, 190)
-            },
-            {
-                'bg_start': (235, 245, 240),
-                'bg_end': (215, 235, 225),
-                'text': (30, 50, 40),
-                'accent': (80, 140, 100),
-                'shadow': (190, 210, 200)
-            }
-        ]
     
     def load_fonts(self):
         """Load fonts with fallback options"""
@@ -94,23 +69,9 @@ class ConfessionImageGenerator:
             default_font = ImageFont.load_default()
             return default_font, default_font, default_font
     
-    def create_gradient_background(self, colors: Dict) -> Image.Image:
-        """Create a subtle gradient background"""
-        img = Image.new('RGB', (self.img_width, self.img_height))
-        draw = ImageDraw.Draw(img)
-        
-        # Create vertical gradient
-        for y in range(self.img_height):
-            # Calculate gradient ratio
-            ratio = y / self.img_height
-            
-            # Interpolate colors
-            r = int(colors['bg_start'][0] * (1 - ratio) + colors['bg_end'][0] * ratio)
-            g = int(colors['bg_start'][1] * (1 - ratio) + colors['bg_end'][1] * ratio)
-            b = int(colors['bg_start'][2] * (1 - ratio) + colors['bg_end'][2] * ratio)
-            
-            draw.line([(0, y), (self.img_width, y)], fill=(r, g, b))
-        
+    def create_solid_background(self, colors: Dict) -> Image.Image:
+        """Create a solid background image"""
+        img = Image.new('RGB', (self.img_width, self.img_height), color=colors['bg'])
         return img
     
     def split_text_into_slides(self, text: str) -> List[str]:
@@ -162,7 +123,7 @@ class ConfessionImageGenerator:
         font_large, font_medium, font_small = self.load_fonts()
         
         # Create background
-        img = self.create_gradient_background(colors)
+        img = self.create_solid_background(colors)
         draw = ImageDraw.Draw(img)
         
         # Add decorative elements
@@ -177,7 +138,7 @@ class ConfessionImageGenerator:
         total_text_height = len(lines) * line_height
         start_y = (self.img_height - total_text_height) // 2
         
-        # Draw text with shadow effect
+        # Draw text (no shadow)
         for i, line in enumerate(lines):
             # Calculate x position for center alignment
             text_bbox = draw.textbbox((0, 0), line, font=font_large)
@@ -185,9 +146,6 @@ class ConfessionImageGenerator:
             x = (self.img_width - text_width) // 2
             y = start_y + (i * line_height)
             
-            # Draw shadow
-            draw.text((x + 2, y + 2), line, font=font_large, fill=colors['shadow'])
-            # Draw main text
             draw.text((x, y), line, font=font_large, fill=colors['text'])
         
         # Add slide indicator
@@ -202,10 +160,10 @@ class ConfessionImageGenerator:
             draw.rectangle([
                 (indicator_x - 10, indicator_y - 5),
                 (indicator_x + indicator_width + 10, indicator_y + 25)
-            ], fill=colors['accent'], outline=colors['text'])
+            ], fill=colors['text'], outline=colors['text'])
             
             draw.text((indicator_x, indicator_y), indicator_text, 
-                     font=font_small, fill=colors['text'])
+                     font=font_small, fill=colors['bg'])
         
         # Add watermark
         watermark = "IITK QUICK CONFESSIONS"
@@ -250,7 +208,11 @@ class ConfessionImageGenerator:
     def generate_confession_images(self, confession_text: str, row_num: str, confession_id: str, count: int) -> List[str]:
         """Generate single or carousel images based on text length"""
         # Choose color scheme based on confession ID for consistency
-        color_scheme = self.color_schemes[hash(row_num) % len(self.color_schemes)]
+        color_scheme = {
+                        'bg': (0, 0, 0),
+                        'text': (255, 255, 255),
+                        'accent': (220, 220, 220),
+                        }
         
         # Split text into slides
         slides = self.split_text_into_slides(confession_text)
