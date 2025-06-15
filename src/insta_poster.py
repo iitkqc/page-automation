@@ -5,8 +5,7 @@ import cloudinary
 import cloudinary.uploader
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
-import math
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 # --- Configuration ---
 FB_GRAPH_API_BASE = "https://graph.instagram.com/v21.0"

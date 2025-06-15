@@ -1,10 +1,6 @@
 import os
 import gspread
-import json
-from datetime import datetime
 import base64 
-from datetime import datetime, timedelta
-import pytz
 
 # You'll need to share your Google Sheet with the service account email.
 

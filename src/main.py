@@ -1,7 +1,5 @@
 import os
-import json
 from datetime import datetime
-import time # Import time for delays
 import base64
 
 # Change import from google_forms_reader to google_sheets_reader
