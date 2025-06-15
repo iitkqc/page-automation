@@ -76,7 +76,7 @@ class ConfessionImageGenerator:
             
             for path in font_paths:
                 try:
-                    font_large = ImageFont.truetype(path, 60)
+                    font_large = ImageFont.truetype(path, 50)
                     font_medium = ImageFont.truetype(path, 32)
                     font_small = ImageFont.truetype(path, 24)
                     break
@@ -158,7 +158,7 @@ class ConfessionImageGenerator:
         return slides
     
     def create_slide_image(self, text: str, slide_num: int, total_slides: int, 
-                          colors: Dict, confession_id: str) -> str:
+                          colors: Dict, row_num: str, confession_id: str, count: int) -> str:
         """Create a single slide image"""
         font_large, font_medium, font_small = self.load_fonts()
         
@@ -210,13 +210,19 @@ class ConfessionImageGenerator:
         
         # Add watermark
         watermark = "IITK QUICK CONFESSIONS"
-        watermark_bbox = draw.textbbox((0, 0), watermark, font=font_small)
-        watermark_width = watermark_bbox[2] - watermark_bbox[0]
         draw.text(((self.img_width) // 2, 50), 
                     watermark, font=font_medium, fill=colors['accent'], anchor="mm")
         
+        if slide_num == 1:
+            # Add confession ID and count on first slide
+            id_text = f"#{count}"
+            draw.text(((self.img_width) // 2, 100), 
+                    id_text, font=font_medium, fill=colors['accent'], anchor="mm")
+            
+            # TODO: Add timestamp somewhere, need to think of the best place
+        
         # Save image
-        filename = f"confession_{confession_id}_slide_{slide_num}.png"
+        filename = f"confession_{row_num}_slide_{slide_num}.png"
         image_path = os.path.join(IMAGE_OUTPUT_DIR, filename)
         img.save(image_path, quality=95, optimize=True)
         
@@ -242,32 +248,32 @@ class ConfessionImageGenerator:
                  (self.img_width - 20, self.img_height - 20)], 
                 start=0, end=90, fill=colors['accent'], width=3)
     
-    def generate_confession_images(self, confession_text: str, confession_id: str) -> List[str]:
+    def generate_confession_images(self, confession_text: str, row_num: str, confession_id: str, count: int) -> List[str]:
         """Generate single or carousel images based on text length"""
         # Choose color scheme based on confession ID for consistency
-        color_scheme = self.color_schemes[hash(confession_id) % len(self.color_schemes)]
+        color_scheme = self.color_schemes[hash(row_num) % len(self.color_schemes)]
         
         # Split text into slides
         slides = self.split_text_into_slides(confession_text)
         
-        print(f"Generating {len(slides)} slide(s) for confession {confession_id}")
+        print(f"Generating {len(slides)} slide(s) for confession {row_num}")
         
         image_paths = []
         for i, slide_text in enumerate(slides, 1):
             image_path = self.create_slide_image(
-                slide_text, i, len(slides), color_scheme, confession_id
+                slide_text, i, len(slides), color_scheme, row_num, confession_id, count
             )
             image_paths.append(image_path)
         
         return image_paths
 
-def upload_images_to_cloudinary(image_paths: List[str], confession_id: str) -> List[str]:
+def upload_images_to_cloudinary(image_paths: List[str], row_num: str) -> List[str]:
     """Upload multiple images to Cloudinary and return URLs"""
     public_urls = []
     
     for i, image_path in enumerate(image_paths, 1):
         try:
-            public_id = f"confessions/confession_{confession_id}_slide_{i}"
+            public_id = f"confessions/confession_{row_num}_slide_{i}"
             response = cloudinary.uploader.upload(
                 image_path,
                 public_id=public_id,
@@ -314,7 +320,7 @@ def create_instagram_carousel(image_urls: List[str], caption: str) -> str:
             response.raise_for_status()
             media_id = response.json().get('id')
             media_ids.append(media_id)
-            print(f"Created carousel item with ID: {media_id}")
+            print(f"Created carousel item")
         except requests.exceptions.RequestException as e:
             print(f"Error creating carousel item: {e}")
             return ""
@@ -331,7 +337,7 @@ def create_instagram_carousel(image_urls: List[str], caption: str) -> str:
         response = requests.post(url, params=carousel_params)
         response.raise_for_status()
         carousel_id = response.json().get('id')
-        print(f"Created carousel container with ID: {carousel_id}")
+        print(f"Created carousel container")
         return carousel_id
     except requests.exceptions.RequestException as e:
         print(f"Error creating carousel container: {e}")
@@ -355,7 +361,7 @@ def create_single_instagram_post(image_url: str, caption: str) -> str:
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()
         media_container_id = response.json().get('id', '')
-        print(f"Media container created with ID: {media_container_id}")
+        print(f"Media container created with")
         return media_container_id
     except requests.exceptions.RequestException as e:
         print(f"Error creating media container: {e}")
@@ -382,7 +388,7 @@ def publish_instagram_post(media_container_id: str) -> bool:
         print(f"Error publishing post: {e}")
         return False
 
-def schedule_instagram_post(confession_data: Dict) -> bool:
+def schedule_instagram_post(confession_data: Dict, count: int) -> bool:
     """Main function to process confession and post to Instagram"""
     print(f"Processing confession: {confession_data['id']}")
     
@@ -392,7 +398,9 @@ def schedule_instagram_post(confession_data: Dict) -> bool:
     # Generate images (single or carousel)
     image_paths = generator.generate_confession_images(
         confession_data['text'], 
-        confession_data['row_num']
+        confession_data['row_num'], 
+        confession_id = confession_data['id'],
+        count = count
     )
     
     if not image_paths:
@@ -436,7 +444,7 @@ if __name__ == "__main__":
     
     # Test with short text
     short_confession = {
-        'id': 'short_001',
+        'id': '14/06/2025 19:30:55',
         'text': "I secretly love pineapple on pizza and I'm tired of pretending I don't!",
         'summary_caption': "🍕 Food confession time! #confessions #foodie #unpopularopinion",
         'row_num': 1
@@ -451,9 +459,9 @@ if __name__ == "__main__":
     }
     
     print("Testing short confession...")
-    schedule_instagram_post(short_confession)
+    schedule_instagram_post(short_confession, 5111)
     
     print("\n" + "="*50 + "\n")
     
     print("Testing long confession (carousel)...")
-    schedule_instagram_post(long_confession)
+    schedule_instagram_post(long_confession, 5111)

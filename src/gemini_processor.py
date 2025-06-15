@@ -66,7 +66,7 @@ def moderate_and_shortlist_confession(confession_text):
 
     prompt = f"""
     Analyze the following confession text for hate speech, harassment, sexually explicit content, and dangerous content.
-    Also, determine its overall sentiment (Positive, Negative, Neutral, Mixed) and provide a concise summary (max 50 words) suitable for an Instagram caption.
+    Also, determine its overall sentiment (Positive, Negative, Neutral, Mixed) and provide a concise summary (max 50 words) suitable for an Instagram caption along with some hashtags.
 
     **IMPORTANT:** Identify and hide any personal identifiers (like names, specific locations, phone numbers, email addresses) in the "original_text" field with stars (e.g., Pri***s*i for Priyanshi).
 
@@ -77,7 +77,7 @@ def moderate_and_shortlist_confession(confession_text):
     - "is_safe": boolean (true if no major safety violations, false otherwise)
     - "rejection_reason": string (brief reason if not safe, empty string if safe)
     - "sentiment": string (Positive, Negative, Neutral, Mixed)
-    - "summary_caption": string (concise summary suitable for Instagram, max 50 words)
+    - "summary_caption": string (concise summary suitable for Instagram along with some hashtags, max 50 words)
     - "original_text": string (Original text with personal identifiers replaced by placeholders.)
     - "original_text_length": integer (length of the original confession text)
     """

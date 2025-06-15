@@ -5,7 +5,7 @@ import time # Import time for delays
 import base64
 
 # Change import from google_forms_reader to google_sheets_reader
-from google_form_reader import get_sheets_client, get_latest_confessions_from_sheet, mark_confession_as_processed
+from google_form_reader import get_sheets_client, get_latest_confessions_from_sheet, mark_confession_as_processed, get_updated_count
 from gemini_processor import moderate_and_shortlist_confession, select_top_confessions
 from insta_poster import schedule_instagram_post # Updated import to use the new function
 from utils import delete_all_cloudinary_assets
@@ -53,7 +53,7 @@ def main():
     shortlisted_posts = []
     
     for confession in new_confessions:
-        print(f"\nProcessing confession ID: {confession[1]} (Row: {confession[0]})")
+        print(f"\nProcessing confession ID: {confession[1]}")
         
         # 3. Moderate and shortlist using Gemini 1.5 Flash
         gemini_result = moderate_and_shortlist_confession(confession[2])
@@ -83,10 +83,11 @@ def main():
     # 5. Schedule posts using Instagram Graph API
     for i, post_data in enumerate(shortlisted_posts):
         print(f"Attempting to schedule post {i+1}/{len(shortlisted_posts)}...")
+        count = get_updated_count(SHEET_URL, sheets_client)
         
         # Use the new schedule_instagram_post function which handles image generation and posting
-        if schedule_instagram_post(post_data):
-            print(f"Successfully scheduled confession ID: {post_data['id']} (Row: {post_data['row_num']}) to Instagram!")
+        if schedule_instagram_post(post_data, count):
+            print(f"Successfully scheduled confession ID: {post_data['id']} to Instagram!")
             # Mark as processed in sheet with status 1 (success)
             mark_confession_as_processed(SHEET_URL, sheets_client, post_data['row_num'], 1)
         else:
@@ -105,8 +106,9 @@ def main():
 
     print(f"Confession automation finished at {datetime.now()}")
 
+    delete_all_cloudinary_assets()
+
 if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv() # Load environment variables for local testing
     main()
-    delete_all_cloudinary_assets()

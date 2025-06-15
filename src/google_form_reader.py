@@ -93,6 +93,27 @@ def mark_confession_as_processed(sheet_url, client, confession_row, status):
     except Exception as e:
         print(f"Error marking confession {confession_row} as processed: {e}")
 
+def get_updated_count(sheet_url, client)-> int:
+    """
+    Updates the confession count in the Google Sheet.
+    Assumes the count is stored in a specific cell (e.g., A1).
+    """
+    try:
+        spreadsheet = client.open_by_url(sheet_url)
+        worksheet = spreadsheet.get_worksheet(0)
+
+        current_value = int(worksheet.cell(1, 4).value)
+        
+        # Assuming the count is stored in cell A1
+        worksheet.update_cell(1, 4, current_value + 1)
+        print(f"Updated confession count to {current_value + 1} in Google Sheet.")
+
+        return current_value + 1
+    
+    except Exception as e:
+        print(f"Error updating confession count: {e}")
+        return 0
+
 if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
