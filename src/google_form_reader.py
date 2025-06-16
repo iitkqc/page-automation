@@ -109,6 +109,22 @@ def get_updated_count(sheet_url, client)-> int:
     except Exception as e:
         print(f"Error updating confession count: {e}")
         return 0
+    
+def get_instagram_access_token(sheet_url, client)-> str:
+    """Fetches the Instagram access token from environment variables."""
+    spreadsheet = client.open_by_url(sheet_url)
+    token = spreadsheet.get_worksheet(0).cell(1, 5).value
+    return token if token else ""
+
+def set_instagram_access_token(sheet_url, client, token):
+    """Sets the Instagram access token in the Google Sheet."""
+    try:
+        spreadsheet = client.open_by_url(sheet_url)
+        worksheet = spreadsheet.get_worksheet(0)
+        worksheet.update_cell(1, 5, token)  # Assuming token is stored in cell E1
+        print("Instagram access token updated successfully.")
+    except Exception as e:
+        print(f"Error updating Instagram access token")
 
 if __name__ == "__main__":
     from dotenv import load_dotenv

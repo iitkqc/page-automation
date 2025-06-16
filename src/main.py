@@ -3,16 +3,15 @@ from datetime import datetime
 import base64
 
 # Change import from google_forms_reader to google_sheets_reader
-from google_form_reader import get_sheets_client, get_latest_confessions_from_sheet, mark_confession_as_processed, get_updated_count
+from google_form_reader import get_sheets_client, get_latest_confessions_from_sheet, mark_confession_as_processed, get_updated_count, get_instagram_access_token, set_instagram_access_token
 from gemini_processor import moderate_and_shortlist_confession, select_top_confessions
-from insta_poster import schedule_instagram_post # Updated import to use the new function
+from insta_poster import schedule_instagram_post, refresh_instagram_access_token
 from utils import delete_all_cloudinary_assets
 
 # --- Configuration (loaded from environment variables in GitHub Actions) ---
 SHEET_URL = os.getenv("GOOGLE_SHEET_URL")
 CREDENTIALS_JSON_BASE64 = os.getenv("GOOGLE_SHEETS_CREDENTIALS_FILE") # Base64 encoded JSON
 INSTAGRAM_PAGE_ID = os.getenv("INSTAGRAM_PAGE_ID")
-INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN")
 PROCESSED_CONFESSIONS_FILE = "processed_confessions.json" # File to store processed IDs
 
 def decode_credentials(base64_string, filename):
@@ -21,6 +20,25 @@ def decode_credentials(base64_string, filename):
     with open(filename, "wb") as f:
         f.write(decoded_bytes)
     return filename
+
+def add_insta_token_to_environment(client):
+    token = get_instagram_access_token(SHEET_URL, client)
+    if not token:
+        print("No Instagram access token found. Attempting to refresh...")
+        return
+    
+    os.environ['INSTAGRAM_ACCESS_TOKEN'] = token
+
+    if datetime.now().day == 28:
+        print("Refreshing Instagram access token...")
+        new_token = refresh_instagram_access_token()
+        if new_token:
+            set_instagram_access_token(SHEET_URL, client, new_token)
+            os.environ['INSTAGRAM_ACCESS_TOKEN'] = new_token
+            print("Instagram access token refreshed successfully.")
+        else:
+            print("Failed to refresh Instagram access token. Exiting.")
+            return
 
 def main():
     print(f"Starting confession automation at {datetime.now()}")
@@ -40,6 +58,12 @@ def main():
         return
 
     sheets_client = get_sheets_client(credentials_file_path)
+
+    add_insta_token_to_environment(sheets_client) #read toekn from Google Sheet and set it in environment variable, refresh if needed
+
+    if not os.getenv('INSTAGRAM_ACCESS_TOKEN'):
+        print("No Instagram access token found. Please set it in the Google Sheet.")
+        return
     
     # Read confessions from the sheet, using the PROCESSED_CONFESSIONS_FILE to avoid duplicates
     new_confessions = get_latest_confessions_from_sheet(SHEET_URL, sheets_client, PROCESSED_CONFESSIONS_FILE)

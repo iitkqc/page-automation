@@ -10,7 +10,6 @@ from typing import List, Dict
 # --- Configuration ---
 FB_GRAPH_API_BASE = "https://graph.instagram.com/v21.0"
 INSTAGRAM_PAGE_ID = os.getenv("INSTAGRAM_PAGE_ID")
-INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN")
 
 # Cloudinary configuration
 cloudinary.config(
@@ -251,7 +250,7 @@ def upload_images_to_cloudinary(image_paths: List[str], row_num: str) -> List[st
 
 def create_instagram_carousel(image_urls: List[str], caption: str) -> str:
     """Create Instagram carousel post"""
-    if not INSTAGRAM_PAGE_ID or not INSTAGRAM_ACCESS_TOKEN:
+    if not INSTAGRAM_PAGE_ID or not os.getenv("INSTAGRAM_ACCESS_TOKEN"):
         print("Instagram API credentials not set.")
         return ""
     
@@ -268,7 +267,7 @@ def create_instagram_carousel(image_urls: List[str], caption: str) -> str:
 
         headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {INSTAGRAM_ACCESS_TOKEN}"
+        "Authorization": f"Bearer {os.getenv("INSTAGRAM_ACCESS_TOKEN")}"
         }
         params = {
             'image_url': image_url,
@@ -291,7 +290,7 @@ def create_instagram_carousel(image_urls: List[str], caption: str) -> str:
         'media_type': 'CAROUSEL',
         'children': ','.join(media_ids),
         'caption': caption,
-        'access_token': INSTAGRAM_ACCESS_TOKEN
+        'access_token': os.getenv("INSTAGRAM_ACCESS_TOKEN")
     }
     
     try:
@@ -311,7 +310,7 @@ def create_single_instagram_post(image_url: str, caption: str) -> str:
     
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {INSTAGRAM_ACCESS_TOKEN}"
+        "Authorization": f"Bearer {os.getenv("INSTAGRAM_ACCESS_TOKEN")}"
     }
     data = {
         'image_url': image_url,
@@ -330,13 +329,13 @@ def create_single_instagram_post(image_url: str, caption: str) -> str:
 
 def publish_instagram_post(media_container_id: str) -> bool:
     """Publish the media container to Instagram"""
-    if not INSTAGRAM_PAGE_ID or not INSTAGRAM_ACCESS_TOKEN:
+    if not INSTAGRAM_PAGE_ID or not os.getenv("INSTAGRAM_ACCESS_TOKEN"):
         return False
 
     url = f"{FB_GRAPH_API_BASE}/{INSTAGRAM_PAGE_ID}/media_publish"
     params = {
         'creation_id': media_container_id,
-        'access_token': INSTAGRAM_ACCESS_TOKEN
+        'access_token': os.getenv("INSTAGRAM_ACCESS_TOKEN")
     }
 
     try:
@@ -397,7 +396,27 @@ def schedule_instagram_post(confession_data: Dict, count: int) -> bool:
     
     return False
 
-# TODO: Implement post scheduling
+def refresh_instagram_access_token() -> str:
+    """Refresh the Instagram access token if needed"""
+    url = f"{FB_GRAPH_API_BASE}/refresh_access_token"
+    params = {
+        'grant_type': "ig_refresh_token",
+        'access_token': os.getenv("INSTAGRAM_ACCESS_TOKEN")
+    }
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        new_token = response.json().get('access_token', '')
+        if new_token:
+            print("Instagram access token refreshed successfully.")
+            return new_token
+        else:
+            print("Failed to refresh Instagram access token.")
+            return ""
+    except requests.exceptions.RequestException as e:
+        print(f"Error refreshing Instagram access token: {e}")
+        return ""
+
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
