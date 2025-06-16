@@ -125,9 +125,6 @@ class ConfessionImageGenerator:
         img = self.create_solid_background(colors)
         draw = ImageDraw.Draw(img)
         
-        # Add decorative elements
-        self.add_decorative_elements(draw, colors)
-        
         # Wrap text for better readability
         wrapped_text = textwrap.fill(text, width=35, break_long_words=False)
         lines = wrapped_text.split('\n')
@@ -183,26 +180,6 @@ class ConfessionImageGenerator:
         img.save(image_path, quality=95, optimize=True)
         
         return image_path
-    
-    def add_decorative_elements(self, draw: ImageDraw.Draw, colors: Dict):
-        """Add subtle decorative elements"""
-        # Add corner decorations
-        corner_size = 40
-        
-        # Top corners
-        draw.arc([(20, 20), (20 + corner_size, 20 + corner_size)], 
-                start=180, end=270, fill=colors['accent'], width=3)
-        draw.arc([(self.img_width - 20 - corner_size, 20), 
-                 (self.img_width - 20, 20 + corner_size)], 
-                start=270, end=0, fill=colors['accent'], width=3)
-        
-        # Bottom corners
-        draw.arc([(20, self.img_height - 20 - corner_size), 
-                 (20 + corner_size, self.img_height - 20)], 
-                start=90, end=180, fill=colors['accent'], width=3)
-        draw.arc([(self.img_width - 20 - corner_size, self.img_height - 20 - corner_size), 
-                 (self.img_width - 20, self.img_height - 20)], 
-                start=0, end=90, fill=colors['accent'], width=3)
     
     def generate_confession_images(self, confession_text: str, row_num: str, confession_id: str, count: int) -> List[str]:
         """Generate single or carousel images based on text length"""
