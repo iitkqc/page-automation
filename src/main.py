@@ -13,6 +13,7 @@ SHEET_URL = os.getenv("GOOGLE_SHEET_URL")
 CREDENTIALS_JSON_BASE64 = os.getenv("GOOGLE_SHEETS_CREDENTIALS_FILE") # Base64 encoded JSON
 INSTAGRAM_PAGE_ID = os.getenv("INSTAGRAM_PAGE_ID")
 PROCESSED_CONFESSIONS_FILE = "processed_confessions.json" # File to store processed IDs
+MAX_CONFESSION_PER_RUN = os.getenv("MAX_CONFESSION_PER_RUN", 4) # Default to 8 if not set
 
 def decode_credentials(base64_string, filename):
     """Decodes a base64 string to a JSON file."""
@@ -97,9 +98,8 @@ def main():
         print("No safe confessions found for posting.")
         return
 
-  
-    print("Selecting top 6 confessions based on creativity and potential reach...")
-    shortlisted_posts = select_top_confessions(shortlisted_posts)
+    print(f"Selecting top {MAX_CONFESSION_PER_RUN} confessions based on creativity and potential reach...")
+    shortlisted_posts = select_top_confessions(shortlisted_posts, max_count=int(MAX_CONFESSION_PER_RUN))
     print(f"Selected {len(shortlisted_posts)} top confessions for posting.")
 
     # 5. Schedule posts using Instagram Graph API
