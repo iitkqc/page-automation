@@ -71,7 +71,7 @@ class GeminiProcessor:
         - "rejection_reason": string (brief reason if not safe, empty string if safe)
         - "sentiment": string (Positive, Negative, Neutral, Mixed)
         - "summary_caption": string (concise summary suitable for Instagram along with some hashtags, max 50 words)
-        - "original_text": string (Original text with personal identifiers replaced by placeholders.)
+        - "original_text": string (Original text with personal identifiers replaced by ****.)
         - "original_text_length": integer (length of the original confession text)
         """
 

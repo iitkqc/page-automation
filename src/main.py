@@ -142,12 +142,13 @@ class ConfessionAutomation:
         """Schedule posts using Instagram Graph API."""
         for i, post_data in enumerate(shortlisted_posts):
             print(f"Attempting to schedule post {i+1}/{len(shortlisted_posts)}...")
-            count = self.google_reader.get_updated_count()
+            count = self.google_reader.get_count()
             
             # Use the Instagram poster to schedule the post
-            if self.instagram_poster.schedule_instagram_post(post_data, count):
+            if self.instagram_poster.schedule_instagram_post(post_data, count + 1):
                 print(f"Successfully scheduled confession ID: {post_data['id']} to Instagram!")
                 # Mark as processed in sheet with status 1 (success)
+                self.google_reader.increment_count()
                 self.google_reader.mark_confession_as_processed(post_data['row_num'], 1)
             else:
                 print(f"Failed to schedule post for confession ID: {post_data['id']}")

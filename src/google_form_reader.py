@@ -107,7 +107,21 @@ class GoogleFormReader:
         except Exception as e:
             print(f"Error marking confession {confession_row} as processed: {e}")
 
-    def get_updated_count(self) -> int:
+    def get_count(self) -> int:
+        """
+        Updates the confession count in the Google Sheet.
+        Assumes the count is stored in a specific cell (e.g., A1).
+        """
+        try:
+            spreadsheet = self.client.open_by_url(self.sheet_url)
+            worksheet = spreadsheet.get_worksheet(0)
+            return int(worksheet.cell(1, 4).value)
+        
+        except Exception as e:
+            print(f"Error getting confession count: {e}")
+            return 0
+        
+    def increment_count(self) -> None:
         """
         Updates the confession count in the Google Sheet.
         Assumes the count is stored in a specific cell (e.g., A1).
@@ -121,12 +135,10 @@ class GoogleFormReader:
             # Assuming the count is stored in cell A1
             worksheet.update_cell(1, 4, current_value + 1)
             print(f"Updated confession count to {current_value + 1} in Google Sheet.")
-
-            return current_value + 1
         
         except Exception as e:
-            print(f"Error updating confession count: {e}")
-            return 0
+            print(f"Error incrementing confession count: {e}")
+            return
         
     def get_instagram_access_token(self) -> str:
         """Fetches the Instagram access token from the Google Sheet."""
