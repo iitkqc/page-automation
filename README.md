@@ -21,6 +21,8 @@ This project automates the process of:
 - ✅ Duplicate prevention system
 - 📊 Google Sheets integration for confession management
 
+Note: Detailed documentation can be found at: [documentation](Documentation.md).
+
 ## Tech Stack
 
 - Python 3.x
@@ -60,6 +62,15 @@ MAX_CONFESSION_PER_RUN=8
 
 | Timestamp | Your Confession |	Status	| {{Confession count}} | {{INSTAGRAM_ACCESS_TOKEN}} |
 |-----------|-----------------|---------|----------------------|----------------------------|
+
+## File Structure
+```
+src/
+├── gemini_processor.py      # GeminiProcessor class
+├── google_form_reader.py    # GoogleFormReader class
+├── insta_poster.py         # InstagramPoster + ConfessionImageGenerator classes
+└── main.py                 # ConfessionAutomation orchestrator class
+```
 
 ## Contributing
 

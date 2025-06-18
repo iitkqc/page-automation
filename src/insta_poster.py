@@ -2,6 +2,8 @@ import requests
 import os
 import time
 import cloudinary
+import cloudinary.api
+from cloudinary.exceptions import Error
 import cloudinary.uploader
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
@@ -204,195 +206,275 @@ class ConfessionImageGenerator:
         
         return image_paths
 
-def upload_images_to_cloudinary(image_paths: List[str], row_num: str) -> List[str]:
-    """Upload multiple images to Cloudinary and return URLs"""
-    public_urls = []
-    
-    for i, image_path in enumerate(image_paths, 1):
-        try:
-            public_id = f"confessions/confession_{row_num}_slide_{i}"
-            response = cloudinary.uploader.upload(
-                image_path,
-                public_id=public_id,
-                overwrite=True,
-                resource_type="image"
-            )
-            public_urls.append(response['secure_url'])
-            print(f"Uploaded slide {i} to Cloudinary: {response['secure_url']}")
-        except Exception as e:
-            print(f"Error uploading slide {i} to Cloudinary: {e}")
-            return []
-    
-    return public_urls
+class InstagramPoster:
+    def __init__(self):
+        """Initialize Instagram Poster with configuration."""
+        self.fb_graph_api_base = FB_GRAPH_API_BASE
+        self.instagram_page_id = INSTAGRAM_PAGE_ID
+        self.access_token = os.getenv("INSTAGRAM_ACCESS_TOKEN")
+        
+        if not self.access_token:
+            print("Warning: INSTAGRAM_ACCESS_TOKEN not set.")
 
-def create_instagram_carousel(image_urls: List[str], caption: str) -> str:
-    """Create Instagram carousel post"""
-    if not INSTAGRAM_PAGE_ID or not os.getenv("INSTAGRAM_ACCESS_TOKEN"):
-        print("Instagram API credentials not set.")
-        return ""
-    
-    # For single image, use regular post
-    if len(image_urls) == 1:
-        return create_single_instagram_post(image_urls[0], caption)
-    
-    # Create carousel container
-    url = f"{FB_GRAPH_API_BASE}/me/media"
-    
-    # First, create media objects for each image
-    media_ids = []
-    for image_url in image_urls:
+    def upload_images_to_cloudinary(self, image_paths: List[str], row_num: str) -> List[str]:
+        """Upload multiple images to Cloudinary and return URLs"""
+        public_urls = []
+        
+        for i, image_path in enumerate(image_paths, 1):
+            try:
+                public_id = f"confessions/confession_{row_num}_slide_{i}"
+                response = cloudinary.uploader.upload(
+                    image_path,
+                    public_id=public_id,
+                    overwrite=True,
+                    resource_type="image"
+                )
+                public_urls.append(response['secure_url'])
+                print(f"Uploaded slide {i} to Cloudinary: {response['secure_url']}")
+            except Exception as e:
+                print(f"Error uploading slide {i} to Cloudinary: {e}")
+                return []
+        
+        return public_urls
 
-        headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv("INSTAGRAM_ACCESS_TOKEN")}"
+    def create_instagram_carousel(self, image_urls: List[str], caption: str) -> str:
+        """Create Instagram carousel post"""
+        if not self.instagram_page_id or not self.access_token:
+            print("Instagram API credentials not set.")
+            return ""
+        
+        # For single image, use regular post
+        if len(image_urls) == 1:
+            return self.create_single_instagram_post(image_urls[0], caption)
+        
+        # Create carousel container
+        url = f"{self.fb_graph_api_base}/me/media"
+        
+        # First, create media objects for each image
+        media_ids = []
+        for image_url in image_urls:
+
+            headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.access_token}"
+            }
+            params = {
+                'image_url': image_url,
+                'caption': caption + " #IITKQuickConfessions #IITKConfessions #confession",
+                'is_carousel_item': 'true',
+            }
+            
+            try:
+                response = requests.post(url, headers=headers, params=params)
+                response.raise_for_status()
+                media_id = response.json().get('id')
+                media_ids.append(media_id)
+                print(f"Created carousel item")
+            except requests.exceptions.RequestException as e:
+                print(f"Error creating carousel item: {e}")
+                return ""
+        
+        # Create carousel container
+        carousel_params = {
+            'media_type': 'CAROUSEL',
+            'children': ','.join(media_ids),
+            'caption': caption,
+            'access_token': self.access_token
         }
-        params = {
+        
+        try:
+            response = requests.post(url, params=carousel_params)
+            response.raise_for_status()
+            carousel_id = response.json().get('id')
+            print(f"Created carousel container")
+            return carousel_id
+        except requests.exceptions.RequestException as e:
+            print(f"Error creating carousel container: {e}")
+            print(f"Response: {response.text}")
+            return ""
+
+    def create_single_instagram_post(self, image_url: str, caption: str) -> str:
+        """Create single Instagram post"""
+        url = f"{self.fb_graph_api_base}/{self.instagram_page_id}/media"
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.access_token}"
+        }
+        data = {
             'image_url': image_url,
             'caption': caption + " #IITKQuickConfessions #IITKConfessions #confession",
-            'is_carousel_item': 'true',
         }
         
         try:
-            response = requests.post(url, headers=headers, params=params)
+            response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
-            media_id = response.json().get('id')
-            media_ids.append(media_id)
-            print(f"Created carousel item")
+            media_container_id = response.json().get('id', '')
+            print(f"Media container created with")
+            return media_container_id
         except requests.exceptions.RequestException as e:
-            print(f"Error creating carousel item: {e}")
+            print(f"Error creating media container: {e}")
             return ""
-    
-    # Create carousel container
-    carousel_params = {
-        'media_type': 'CAROUSEL',
-        'children': ','.join(media_ids),
-        'caption': caption,
-        'access_token': os.getenv("INSTAGRAM_ACCESS_TOKEN")
-    }
-    
-    try:
-        response = requests.post(url, params=carousel_params)
-        response.raise_for_status()
-        carousel_id = response.json().get('id')
-        print(f"Created carousel container")
-        return carousel_id
-    except requests.exceptions.RequestException as e:
-        print(f"Error creating carousel container: {e}")
-        print(f"Response: {response.text}")
-        return ""
 
-def create_single_instagram_post(image_url: str, caption: str) -> str:
-    """Create single Instagram post"""
-    url = f"{FB_GRAPH_API_BASE}/{INSTAGRAM_PAGE_ID}/media"
-    
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.getenv("INSTAGRAM_ACCESS_TOKEN")}"
-    }
-    data = {
-        'image_url': image_url,
-        'caption': caption + " #IITKQuickConfessions #IITKConfessions #confession",
-    }
-    
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()
-        media_container_id = response.json().get('id', '')
-        print(f"Media container created with")
-        return media_container_id
-    except requests.exceptions.RequestException as e:
-        print(f"Error creating media container: {e}")
-        return ""
+    def publish_instagram_post(self, media_container_id: str) -> bool:
+        """Publish the media container to Instagram"""
+        if not self.instagram_page_id or not self.access_token:
+            return False
 
-def publish_instagram_post(media_container_id: str) -> bool:
-    """Publish the media container to Instagram"""
-    if not INSTAGRAM_PAGE_ID or not os.getenv("INSTAGRAM_ACCESS_TOKEN"):
-        return False
+        url = f"{self.fb_graph_api_base}/{self.instagram_page_id}/media_publish"
+        params = {
+            'creation_id': media_container_id,
+            'access_token': self.access_token
+        }
 
-    url = f"{FB_GRAPH_API_BASE}/{INSTAGRAM_PAGE_ID}/media_publish"
-    params = {
-        'creation_id': media_container_id,
-        'access_token': os.getenv("INSTAGRAM_ACCESS_TOKEN")
-    }
-
-    try:
-        response = requests.post(url, params=params)
-        response.raise_for_status()
-        post_id = response.json().get('id')
-        print(f"Successfully published post with ID: {post_id}")
-        return True
-    except requests.exceptions.RequestException as e:
-        print(f"Error publishing post: {e}")
-        return False
-
-def schedule_instagram_post(confession_data: Dict, count: int) -> bool:
-    """Main function to process confession and post to Instagram"""
-    print(f"Processing confession: {confession_data['id']}")
-    
-    # Initialize image generator
-    generator = ConfessionImageGenerator()
-    
-    # Generate images (single or carousel)
-    image_paths = generator.generate_confession_images(
-        confession_data['text'], 
-        confession_data['row_num'], 
-        confession_id = confession_data['id'],
-        count = count
-    )
-    
-    if not image_paths:
-        print("Failed to generate images.")
-        return False
-    
-    # Upload to Cloudinary
-    public_urls = upload_images_to_cloudinary(image_paths, confession_data['id'])
-    if not public_urls:
-        print("Failed to upload images to Cloudinary")
-        return False
-    
-    # Create Instagram post (single or carousel)
-    if len(public_urls) == 1:
-        media_container_id = create_single_instagram_post(public_urls[0], confession_data['summary_caption'])
-    else:
-        media_container_id = create_instagram_carousel(public_urls, confession_data['summary_caption'])
-    
-    if media_container_id:
-        print("Waiting for Instagram to process media...")
-        time.sleep(20)  # Give Instagram time to process
-        
-        success = publish_instagram_post(media_container_id)
-        if success:
-            print(f"Successfully posted confession {confession_data['id']} to Instagram!")
-            # Clean up local images
-            for image_path in image_paths:
-                try:
-                    os.remove(image_path)
-                except:
-                    pass
+        try:
+            response = requests.post(url, params=params)
+            response.raise_for_status()
+            post_id = response.json().get('id')
+            print(f"Successfully published post with ID: {post_id}")
             return True
-    
-    return False
+        except requests.exceptions.RequestException as e:
+            print(f"Error publishing post: {e}")
+            return False
 
-def refresh_instagram_access_token() -> str:
-    """Refresh the Instagram access token if needed"""
-    url = f"{FB_GRAPH_API_BASE}/refresh_access_token"
-    params = {
-        'grant_type': "ig_refresh_token",
-        'access_token': os.getenv("INSTAGRAM_ACCESS_TOKEN")
-    }
-    try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        new_token = response.json().get('access_token', '')
-        if new_token:
-            print("Instagram access token refreshed successfully.")
-            return new_token
+    def schedule_instagram_post(self, confession_data: Dict, count: int) -> bool:
+        """Main function to process confession and post to Instagram"""
+        print(f"Processing confession: {confession_data['id']}")
+        
+        # Initialize image generator
+        generator = ConfessionImageGenerator()
+        
+        # Generate images (single or carousel)
+        image_paths = generator.generate_confession_images(
+            confession_data['text'], 
+            confession_data['row_num'], 
+            confession_id = confession_data['id'],
+            count = count
+        )
+        
+        if not image_paths:
+            print("Failed to generate images.")
+            return False
+        
+        # Upload to Cloudinary
+        public_urls = self.upload_images_to_cloudinary(image_paths, confession_data['id'])
+        if not public_urls:
+            print("Failed to upload images to Cloudinary")
+            return False
+        
+        # Create Instagram post (single or carousel)
+        if len(public_urls) == 1:
+            media_container_id = self.create_single_instagram_post(public_urls[0], confession_data['summary_caption'])
         else:
-            print("Failed to refresh Instagram access token.")
+            media_container_id = self.create_instagram_carousel(public_urls, confession_data['summary_caption'])
+        
+        if media_container_id:
+            print("Waiting for Instagram to process media...")
+            time.sleep(20)  # Give Instagram time to process
+            
+            success = self.publish_instagram_post(media_container_id)
+            if success:
+                print(f"Successfully posted confession {confession_data['id']} to Instagram!")
+                # Clean up local images
+                for image_path in image_paths:
+                    try:
+                        os.remove(image_path)
+                    except:
+                        pass
+                return True
+        
+        return False
+
+    def refresh_instagram_access_token(self) -> str:
+        """Refresh the Instagram access token if needed"""
+        url = f"{self.fb_graph_api_base}/refresh_access_token"
+        params = {
+            'grant_type': "ig_refresh_token",
+            'access_token': self.access_token
+        }
+        try:
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            new_token = response.json().get('access_token', '')
+            if new_token:
+                print("Instagram access token refreshed successfully.")
+                self.access_token = new_token
+                return new_token
+            else:
+                print("Failed to refresh Instagram access token.")
+                return ""
+        except requests.exceptions.RequestException as e:
+            print(f"Error refreshing Instagram access token: {e}")
             return ""
-    except requests.exceptions.RequestException as e:
-        print(f"Error refreshing Instagram access token: {e}")
-        return ""
+        
+    def delete_all_assets(self):
+        """
+        Deletes all assets (images, videos, raw files) from your Cloudinary account.
+        WARNING: This action is irreversible. All assets will be permanently deleted.
+        """
+        print("WARNING: This will permanently delete ALL assets from your Cloudinary account.")
+        print("Please ensure you have backups if needed.")
+
+        resource_types = ['image', 'video', 'raw'] # Add or remove types as needed
+
+        for r_type in resource_types:
+            print(f"\n--- Deleting {r_type.upper()} resources ---")
+            next_cursor = None
+            has_more = True
+            total_deleted = 0
+
+            while has_more:
+                try:
+                    # Use list_resources to get a batch of resource IDs
+                    # max_results can be up to 500
+                    response = cloudinary.api.resources(
+                        type="upload", # 'upload', 'private', 'authenticated'
+                        resource_type=r_type,
+                        max_results=500,
+                        next_cursor=next_cursor
+                    )
+
+                    resources = response.get('resources', [])
+                    if not resources:
+                        print(f"No more {r_type} resources found.")
+                        has_more = False
+                        continue
+
+                    public_ids = [res['public_id'] for res in resources]
+
+                    if public_ids:
+                        print(f"Found {len(public_ids)} {r_type} resources to delete. Deleting...")
+                        # Delete the resources
+                        delete_result = cloudinary.api.delete_resources(
+                            public_ids,
+                            resource_type=r_type,
+                            invalidate=True # Invalidate CDN cache for these assets
+                        )
+                        total_deleted += len(public_ids)
+                        print(f"Deletion status for current batch: {delete_result}")
+                    else:
+                        print(f"No {r_type} public IDs to delete in this batch.")
+
+                    next_cursor = response.get('next_cursor')
+                    if not next_cursor:
+                        has_more = False
+                        print(f"Finished processing all {r_type} resources.")
+                    else:
+                        print(f"Proceeding to next batch of {r_type} resources...")
+                        # Small delay to respect API rate limits, especially for very large accounts
+                        time.sleep(1)
+
+                except Error as e:
+                    print(f"Cloudinary API Error while deleting {r_type}: {e}")
+                    has_more = False # Stop on error
+                except Exception as e:
+                    print(f"An unexpected error occurred while deleting {r_type}: {e}")
+                    has_more = False # Stop on error
+
+            print(f"--- Total {r_type.upper()} resources deleted: {total_deleted} ---")
+
+        print("\n--- All specified resource types have been processed. ---")
+        print("It may take some time for changes to propagate and for CDN caches to clear.")
 
 
 if __name__ == "__main__":
@@ -415,10 +497,12 @@ if __name__ == "__main__":
         'row_num': 2
     }
     
+    poster = InstagramPoster()
+    
     print("Testing short confession...")
-    schedule_instagram_post(short_confession, 5111)
+    poster.schedule_instagram_post(short_confession, 5111)
     
     print("\n" + "="*50 + "\n")
     
     print("Testing long confession (carousel)...")
-    schedule_instagram_post(long_confession, 5111)
+    poster.schedule_instagram_post(long_confession, 5111)
