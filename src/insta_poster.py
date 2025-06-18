@@ -248,7 +248,7 @@ def create_instagram_carousel(image_urls: List[str], caption: str) -> str:
         }
         params = {
             'image_url': image_url,
-            'caption': caption,
+            'caption': caption + " #IITKQuickConfessions #IITKConfessions #confession",
             'is_carousel_item': 'true',
         }
         
@@ -291,7 +291,7 @@ def create_single_instagram_post(image_url: str, caption: str) -> str:
     }
     data = {
         'image_url': image_url,
-        'caption': caption + " #IITKQuickConfessions" + " #IITKConfessions" + " #confession",
+        'caption': caption + " #IITKQuickConfessions #IITKConfessions #confession",
     }
     
     try:
