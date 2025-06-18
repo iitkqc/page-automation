@@ -31,12 +31,12 @@ jobs:
         GOOGLE_SHEET_URL: ${{ secrets.GOOGLE_SHEET_URL }}
         GOOGLE_SHEETS_CREDENTIALS_FILE: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_FILE }}
         INSTAGRAM_PAGE_ID: ${{ secrets.INSTAGRAM_PAGE_ID }}
-        INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
         INSTAGRAM_APP_ID: ${{ secrets.INSTAGRAM_APP_ID }}
         INSTAGRAM_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET }}
         CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
         CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
         CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+        MAX_CONFESSION_PER_RUN: ${{ secrets.MAX_CONFESSION_PER_RUN }}
       run: uv run python src/main.py
 
     - name: Cleanup generated_images and credentials
