@@ -1,4 +1,5 @@
 import google.generativeai as genai
+from google.generativeai import protos
 import os
 import json
 
@@ -68,7 +69,7 @@ def moderate_and_shortlist_confession(confession_text):
     Analyze the following confession text for hate speech, harassment, sexually explicit content, and dangerous content.
     Also, determine its overall sentiment (Positive, Negative, Neutral, Mixed) and provide a concise summary (max 50 words) suitable for an Instagram caption along with some hashtags.
 
-    **IMPORTANT:** Identify and hide any personal identifiers (like names, specific locations, phone numbers, email addresses) in the "original_text" field with stars (e.g., Pri***s*i for Priyanshi).
+    **IMPORTANT:** Identify and hide any personal identifiers (like names, specific locations, phone numbers, email addresses) in the "original_text" field replacing the letters by star (e.g., Priyanshi becomes Pri****hi and Ashutosh becomes Ash****h).
 
     Confession Text:
     "{confession_text}"
@@ -95,6 +96,19 @@ def moderate_and_shortlist_confession(confession_text):
         # Check if the content was blocked by safety settings
         if not response._result.candidates:
             # Content was blocked by safety settings before even reaching the model logic
+            safety_feedback = response._result.prompt_feedback.safety_ratings
+            reasons = [f"{s.category}: {s.probability}" for s in safety_feedback if s.blocked]
+            return {
+                'is_safe': False,
+                'rejection_reason': f"Blocked by Google's safety filters: {'; '.join(reasons)}",
+                'sentiment': 'N/A',
+                'summary_caption': '',
+                'original_text': confession_text,  # Original text as fallback
+                'original_text_length': len(confession_text)
+            }
+        
+        if response._result.candidates[0].finish_reason == protos.Candidate.FinishReason.SAFETY:
+            # Content was blocked by safety settings after model processing
             safety_feedback = response._result.prompt_feedback.safety_ratings
             reasons = [f"{s.category}: {s.probability}" for s in safety_feedback if s.blocked]
             return {
