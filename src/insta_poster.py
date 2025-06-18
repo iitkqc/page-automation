@@ -291,7 +291,7 @@ def create_single_instagram_post(image_url: str, caption: str) -> str:
     }
     data = {
         'image_url': image_url,
-        'caption': caption
+        'caption': caption + " #IITKQuickConfessions" + " #IITKConfessions" + " #confession",
     }
     
     try:
