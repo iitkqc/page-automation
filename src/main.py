@@ -86,7 +86,9 @@ class ConfessionAutomation:
             self.processed_confessions_file
         )
         print(f"Found {len(new_confessions)} new confessions from sheet.")
-        
+        new_confessions = new_confessions[-15:]  # Limit to last 15 confessions for rate limiting
+        print(f"Processing {len(new_confessions)} confessions for moderation.")
+
         if not new_confessions:
             print("No new confessions found in the Google Sheet.")
             return

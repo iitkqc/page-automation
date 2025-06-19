@@ -10,7 +10,7 @@ class GeminiProcessor:
         if not self.api_key:
             raise ValueError("GOOGLE_API_KEY environment variable not set.")
         genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
 
     def select_top_confessions(self, confessions, max_count=4):
         """
@@ -72,7 +72,6 @@ class GeminiProcessor:
         - "sentiment": string (Positive, Negative, Neutral, Mixed)
         - "summary_caption": string (concise summary suitable for Instagram along with some hashtags, max 50 words)
         - "original_text": string (Original text with personal identifiers replaced by ****.)
-        - "original_text_length": integer (length of the original confession text)
         """
 
         try:
@@ -95,8 +94,7 @@ class GeminiProcessor:
                     'rejection_reason': f"Blocked by Google's safety filters: {'; '.join(reasons)}",
                     'sentiment': 'N/A',
                     'summary_caption': '',
-                    'original_text': confession_text,  # Original text as fallback
-                    'original_text_length': len(confession_text)
+                    'original_text': confession_text  # Original text as fallback
                 }
             
             if response._result.candidates[0].finish_reason == protos.Candidate.FinishReason.SAFETY:
@@ -108,8 +106,7 @@ class GeminiProcessor:
                     'rejection_reason': f"Blocked by Google's safety filters: {'; '.join(reasons)}",
                     'sentiment': 'N/A',
                     'summary_caption': '',
-                    'original_text': confession_text,  # Original text as fallback
-                    'original_text_length': len(confession_text)
+                    'original_text': confession_text  # Original text as fallback
                 }
 
             # Attempt to parse JSON response from Gemini
@@ -121,8 +118,7 @@ class GeminiProcessor:
                     'rejection_reason': gemini_output.get('rejection_reason', ''),
                     'sentiment': gemini_output.get('sentiment', 'Unknown'),
                     'summary_caption': gemini_output.get('summary_caption', ''),
-                    'original_text': gemini_output.get('original_text', confession_text), # Fallback to original if not provided
-                    'original_text_length': gemini_output.get('original_text_length', len(confession_text))
+                    'original_text': gemini_output.get('original_text', confession_text) # Fallback to original if not provided
                 }
             except json.JSONDecodeError:
                 # Fallback if Gemini doesn't return perfect JSON
@@ -133,8 +129,7 @@ class GeminiProcessor:
                     'rejection_reason': "Gemini response parsing error (manual review advised).",
                     'sentiment': 'Unknown',
                     'summary_caption': response.text[:50] + "..." if response.text else "", # Take first 50 chars as fallback
-                    'original_text': confession_text,  # Fallback to original text
-                    'original_text_length': len(confession_text)
+                    'original_text': confession_text  # Fallback to original text
                 }
 
         except genai.types.BlockedPromptException as e:
@@ -144,8 +139,7 @@ class GeminiProcessor:
                 'rejection_reason': f"Prompt blocked by safety settings: {e.response.prompt_feedback.safety_ratings}",
                 'sentiment': 'N/A',
                 'summary_caption': '',
-                'original_text': confession_text,  # Fallback to original text
-                'original_text_length': len(confession_text)
+                'original_text': confession_text  # Fallback to original text
             }
         except Exception as e:
             print(f"Error calling Gemini API: {e}")
@@ -154,8 +148,7 @@ class GeminiProcessor:
                 'rejection_reason': f"API error: {e}",
                 'sentiment': 'N/A',
                 'summary_caption': '',
-                'original_text': confession_text,  # Fallback to original text
-                'original_text_length': len(confession_text)
+                'original_text': confession_text  # Fallback to original text
             }
 
 if __name__ == "__main__":
@@ -163,7 +156,7 @@ if __name__ == "__main__":
     load_dotenv()
     
     processor = GeminiProcessor()
-    test_confession = "I secretly eat my roommate's food every night, and they still blame the cat."
+    test_confession = "I just saw a confession of a girl telling about some bra-chor. It reminded me that mere bhi kuchh kachhe chori hue hai please lauta dena."
     result = processor.moderate_and_shortlist_confession(test_confession)
     print(result)
 
