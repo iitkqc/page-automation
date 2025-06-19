@@ -121,6 +121,10 @@ class ConfessionAutomation:
         
         for confession in new_confessions:
             print(f"\nProcessing confession ID: {confession[1]}")
+
+            if len(confession[2]) < 60:
+                print(f"Confession ID {confession[1]} is too short to process. Skipping.")
+                continue
             
             # Moderate and shortlist using Gemini
             gemini_result = self.gemini_processor.moderate_and_shortlist_confession(confession[2])

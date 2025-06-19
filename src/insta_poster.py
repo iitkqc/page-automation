@@ -195,6 +195,10 @@ class ConfessionImageGenerator:
         # Split text into slides
         slides = self.split_text_into_slides(confession_text)
         
+        if len(slides) > 10:
+            print(f"Warning: Confession {row_num} has {len(slides)} slides, which exceeds the limit of 10. Truncating to 10 slides.")
+            slides = slides[:10]
+        
         print(f"Generating {len(slides)} slide(s) for confession {row_num}")
         
         image_paths = []
@@ -260,7 +264,7 @@ class InstagramPoster:
             }
             params = {
                 'image_url': image_url,
-                'caption': caption + " #IITKQuickConfessions #IITKConfessions #confession",
+                'caption': caption,
                 'is_carousel_item': 'true',
             }
             
@@ -278,7 +282,7 @@ class InstagramPoster:
         carousel_params = {
             'media_type': 'CAROUSEL',
             'children': ','.join(media_ids),
-            'caption': caption,
+            'caption': caption + " #IITKQuickConfessions #IITKConfessions #confession",
             'access_token': self.access_token
         }
         
