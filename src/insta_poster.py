@@ -217,8 +217,8 @@ class InstagramPoster:
         self.instagram_page_id = INSTAGRAM_PAGE_ID
         self.access_token = os.getenv("INSTAGRAM_ACCESS_TOKEN")
         
-        if not self.access_token:
-            print("Warning: INSTAGRAM_ACCESS_TOKEN not set.")
+        # if not self.access_token:
+        #     print("Warning: INSTAGRAM_ACCESS_TOKEN not set.")
 
     def upload_images_to_cloudinary(self, image_paths: List[str], row_num: str) -> List[str]:
         """Upload multiple images to Cloudinary and return URLs"""
@@ -282,7 +282,7 @@ class InstagramPoster:
         carousel_params = {
             'media_type': 'CAROUSEL',
             'children': ','.join(media_ids),
-            'caption': caption + " #IITKQuickConfessions #IITKConfessions #confession",
+            'caption': caption + " #IITKQuickConfessions #IITKConfessions #confession #iitk #iitkanpur #iit #jee #jeeadvanced #jeemains",
             'access_token': self.access_token
         }
         
@@ -307,7 +307,7 @@ class InstagramPoster:
         }
         data = {
             'image_url': image_url,
-            'caption': caption + " #IITKQuickConfessions #IITKConfessions #confession",
+            'caption': caption + " #IITKQuickConfessions #IITKConfessions #confession #iitk #iitkanpur #iit #jee #jeeadvanced #jeemains",
         }
         
         try:
