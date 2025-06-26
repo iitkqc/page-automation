@@ -32,6 +32,7 @@ class GeminiProcessor:
             * **Struggles or triumphs** related to courses, professors, exams, placements, college fests, clubs, inter-hall competitions, or other unique aspects of IITK life.
             * **Inside jokes** or common student observations unique to IITK.
             * **Hostel life**, residential hall experiences, or campus infrastructure issues.
+            * **Observations on campus social dynamics**, dating culture, or interpersonal relationships within the IITK context
         * **Engagement Potential:** The best confessions will naturally spark **discussion, foster relatability, or have the potential to go viral**. Consider if the confession is:
             * **Humorous or emotionally impactful.**
             * Likely to prompt a wide range of responses (agreement, debate, shared experiences).
