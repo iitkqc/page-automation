@@ -24,14 +24,20 @@ class GeminiProcessor:
         ])
 
         prompt = f"""
-        You are an expert social media content curator for IIT Kanpur. Your task is to select the most engaging confessions from the list below.
+        You are an expert social media content curator for IIT Kanpur. Your task is to select the most engaging confessions from the list below that will resonate deeply with the IITK student body and suitable for public sharing within the IITK community.
 
-        Selection criteria:
-        1. Creativity and originality
-        2. Strong relevance to IITK student life
-        3. Humor, relatability, or emotional impact
-        4. High potential for engagement, discussion, or virality
-        5. Diversity in tone and topic (e.g., mix of funny, serious, and relatable confessions)
+        **Selection criteria:**
+        * **IITK Relevance & Resonance:** The confession should deeply connect with **IITK student life**. Look for content that highlights:
+            * **Campus-specific experiences** (e.g., convocation, yearbooks, fests, specific campus locations).
+            * **Struggles or triumphs** related to courses, professors, exams, placements, college fests, clubs, inter-hall competitions, or other unique aspects of IITK life.
+            * **Inside jokes** or common student observations unique to IITK.
+            * **Hostel life**, residential hall experiences, or campus infrastructure issues.
+        * **Engagement Potential:** The best confessions will naturally spark **discussion, foster relatability, or have the potential to go viral**. Consider if the confession is:
+            * **Humorous or emotionally impactful.**
+            * Likely to prompt a wide range of responses (agreement, debate, shared experiences).
+        * **Tone & Appropriateness:** Ensure the confession adheres to community guidelines. It's okay to include **constructive or humorous criticism** of the institute, professors, or student bodies/clubs. However, **strictly avoid** any content that involves hate speech, harassment, personal attacks, or sexually explicit material.
+        * **Diversity in Content:** Aim for a good mix of confessions that offer **diverse tones and topics**. This includes a balance of funny, serious, and deeply relatable submissions to keep the confession page dynamic and appealing to a broad audience.
+
 
         Review the following confessions:
 
@@ -42,7 +48,8 @@ class GeminiProcessor:
         """
 
         try:
-            response = self.model.generate_content(prompt)
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            response = model.generate_content(prompt)
             selected_indices = json.loads(response.text.strip().replace('```json\n', '').replace('\n```', ''))
             
             # Convert 1-based indices to 0-based and get selected confessions
