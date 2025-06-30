@@ -8,7 +8,7 @@ import cloudinary.uploader
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
 from typing import List, Dict
-from .model import Confession
+from model import Confession
 
 # --- Configuration ---
 FB_GRAPH_API_BASE = "https://graph.instagram.com/v21.0"

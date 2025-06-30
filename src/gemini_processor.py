@@ -149,7 +149,7 @@ class GeminiProcessor:
                 print(f"Warning: Gemini did not return perfect JSON. Raw response: {response.text}")
                 # You might need to refine the prompt or use a more robust parsing
                 return {
-                    'is_safe': True, # Assume safe if JSON parsing fails but no explicit block
+                    'is_safe': False, # Assume safe if JSON parsing fails but no explicit block
                     'rejection_reason': "Gemini response parsing error (manual review advised).",
                     'sentiment': 'Unknown',
                     'summary_caption': response.text[:50] + "..." if response.text else "" # Take first 50 chars as fallback

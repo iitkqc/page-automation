@@ -14,7 +14,6 @@ class ConfessionAutomation:
         self.sheet_url = os.getenv("GOOGLE_SHEET_URL")
         self.credentials_json_base64 = os.getenv("GOOGLE_SHEETS_CREDENTIALS_FILE")
         self.instagram_page_id = os.getenv("INSTAGRAM_PAGE_ID")
-        self.processed_confessions_file = "processed_confessions.json"
         self.max_confession_per_run = int(os.getenv("MAX_CONFESSION_PER_RUN", 4))
         
         # Initialize components
@@ -84,9 +83,7 @@ class ConfessionAutomation:
             return
         
         # Read confessions from the sheet
-        new_confessions = self.google_reader.get_latest_confessions_from_sheet(
-            self.processed_confessions_file
-        )
+        new_confessions = self.google_reader.get_latest_confessions_from_sheet()
         print(f"Found {len(new_confessions)} new confessions from sheet.")
         if len(new_confessions) < 10:
             print("Not enough confessions to process. Minimum 10 required.")
@@ -119,7 +116,7 @@ class ConfessionAutomation:
         self.schedule_posts(shortlisted_posts)
 
         # Mark unpublished rows to 0
-        total_rows = [item[0] for item in new_confessions]
+        total_rows = [item.row_num for item in new_confessions]
         posted_rows = [item.row_num for item in shortlisted_posts]
 
         not_posted_rows = set(total_rows) - set(posted_rows)
