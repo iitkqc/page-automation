@@ -243,7 +243,7 @@ class InstagramPoster:
         
         return public_urls
 
-    def create_instagram_carousel(self, image_urls: List[str], caption: str | None) -> str:
+    def create_instagram_carousel(self, image_urls: List[str], caption: str | None, sigma_reply: str | None) -> str:
         """Create Instagram carousel post"""
         if not self.instagram_page_id or not self.access_token:
             print("Instagram API credentials not set.")
@@ -251,7 +251,7 @@ class InstagramPoster:
         
         # For single image, use regular post
         if len(image_urls) == 1:
-            return self.create_single_instagram_post(image_urls[0], caption)
+            return self.create_single_instagram_post(image_urls[0], caption, sigma_reply)
         
         # Create carousel container
         url = f"{self.fb_graph_api_base}/me/media"
@@ -284,7 +284,7 @@ class InstagramPoster:
         carousel_params = {
             'media_type': 'CAROUSEL',
             'children': ','.join(media_ids),
-            'caption': caption + " #IITKQuickConfessions #IITKConfessions #confession #iitk #iitkanpur #iit #jee #jeeadvanced #jeemains",
+            'caption': f"{f'Admin reply: {sigma_reply}\n' if sigma_reply else ''} \n\n Summary: {caption} \n\n#IITKQuickConfessions #IITKConfessions #confession #iitk #iitkanpur #iit #jee #jeeadvanced #jeemains",
             'access_token': self.access_token
         }
         
@@ -299,7 +299,7 @@ class InstagramPoster:
             print(f"Response: {response.text}")
             return ""
 
-    def create_single_instagram_post(self, image_url: str, caption: str | None) -> str:
+    def create_single_instagram_post(self, image_url: str, caption: str | None, sigma_reply: str | None) -> str:
         """Create single Instagram post"""
         url = f"{self.fb_graph_api_base}/{self.instagram_page_id}/media"
         
@@ -309,7 +309,7 @@ class InstagramPoster:
         }
         data = {
             'image_url': image_url,
-            'caption': caption + " #IITKQuickConfessions #IITKConfessions #confession #iitk #iitkanpur #iit #jee #jeeadvanced #jeemains",
+            'caption': f"{f'Admin reply: {sigma_reply}\n' if sigma_reply else ''} \n\n Summary: {caption} \n\n#IITKQuickConfessions #IITKConfessions #confession #iitk #iitkanpur #iit #jee #jeeadvanced #jeemains",
         }
         
         try:
@@ -365,9 +365,9 @@ class InstagramPoster:
         
         # Create Instagram post (single or carousel)
         if len(public_urls) == 1:
-            media_container_id = self.create_single_instagram_post(public_urls[0], confession.summary_caption)
+            media_container_id = self.create_single_instagram_post(public_urls[0], confession.summary_caption, confession.sigma_reply)
         else:
-            media_container_id = self.create_instagram_carousel(public_urls, confession.summary_caption)
+            media_container_id = self.create_instagram_carousel(public_urls, confession.summary_caption, confession.sigma_reply)
         
         if media_container_id:
             print("Waiting for Instagram to process media...")
@@ -482,28 +482,34 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()
     
-    # Test with short text
-    short_confession = {
-        'id': '14/06/2025 19:30:55',
-        'text': "I secretly love pineapple on pizza and I'm tired of pretending I don't!",
-        'summary_caption': "🍕 Food confession time! #confessions #foodie #unpopularopinion",
-        'row_num': 1
-    }
+    # Test with short tex
+    short_confession = Confession(
+        timestamp= '14/06/2025 19:30:55',
+        row_num=1,
+        text="I secretly love pineapple on pizza and I'm tired of pretending I don't!",
+        summary_caption="🍕 Food confession time! #confessions #foodie #unpopularopinion",
+        sentiment="positive",
+        count=1,
+        sigma_reply="Embrace your unique taste! Pineapple on pizza is a bold choice! 🍍🍕"
+    )
     
     # Test with long text that will create a carousel
-    long_confession = {
-        'id': 'long_001',
-        'text': """I've been living a double life for the past three years. By day, I'm a corporate lawyer working 80-hour weeks in a prestigious firm. Everyone thinks I'm this successful, put-together person. But by night, I'm a street artist creating murals in abandoned buildings around the city. I've never told anyone, not even my closest friends or family. The art world knows me by a completely different name, and I've even sold some pieces to galleries. The crazy part is that some of my corporate colleagues have unknowingly bought my art for their offices. I'm torn between two worlds - the financial security of my legal career and the creative fulfillment of my art. Sometimes I wonder what would happen if these two worlds collided. Would I lose everything I've worked for, or would people finally see the real me? I dream of the day I can just be an artist full-time, but the fear of disappointing everyone and losing my stable income keeps me trapped in this double life. It's exhausting pretending to be someone I'm not during the day, but I don't know how to break free from this cycle.""",
-        'summary_caption': "🎨 Living a double life between corporate world and street art... #confessions #artist #doublelife #authentic #dreams",
-        'row_num': 2
-    }
+    long_confession = Confession(
+        timestamp='14/06/2025 19:35:00',
+        row_num=2,
+        text= """I've been living a double life for the past three years. By day, I'm a corporate lawyer working 80-hour weeks in a prestigious firm. Everyone thinks I'm this successful, put-together person. But by night, I'm a street artist creating murals in abandoned buildings around the city. I've never told anyone, not even my closest friends or family. The art world knows me by a completely different name, and I've even sold some pieces to galleries. The crazy part is that some of my corporate colleagues have unknowingly bought my art for their offices. I'm torn between two worlds - the financial security of my legal career and the creative fulfillment of my art. Sometimes I wonder what would happen if these two worlds collided. Would I lose everything I've worked for, or would people finally see the real me? I dream of the day I can just be an artist full-time, but the fear of disappointing everyone and losing my stable income keeps me trapped in this double life. It's exhausting pretending to be someone I'm not during the day, but I don't know how to break free from this cycle.""",
+        summary_caption="🎨 Living a double life between corporate world and street art... #confessions #artist #doublelife #authentic #dreams",
+        sentiment="mixed",
+        count=2,
+        sigma_reply="Your story is a powerful reminder of the struggle between passion and stability."
+    )
     
     poster = InstagramPoster()
     
     print("Testing short confession...")
-    poster.schedule_instagram_post(short_confession, 5111)
+    poster.schedule_instagram_post(short_confession)
     
     print("\n" + "="*50 + "\n")
     
     print("Testing long confession (carousel)...")
-    poster.schedule_instagram_post(long_confession, 5111)
+    poster.schedule_instagram_post(long_confession)
