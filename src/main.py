@@ -86,6 +86,11 @@ class ConfessionAutomation:
             self.processed_confessions_file
         )
         print(f"Found {len(new_confessions)} new confessions from sheet.")
+        if len(new_confessions) < 10:
+            print("Not enough confessions to process. Minimum 10 required.")
+            print("Exiting")
+            return
+        
         new_confessions = new_confessions[-10:]  # Limit to last 10 confessions for rate limiting
         print(f"Processing {len(new_confessions)} confessions for moderation.")
 
