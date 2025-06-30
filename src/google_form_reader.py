@@ -1,6 +1,8 @@
 import os
 import gspread
 import base64 
+from typing import List
+from model import Confession
 
 # You'll need to share your Google Sheet with the service account email.
 
@@ -47,7 +49,7 @@ class GoogleFormReader:
             print(f"Error authenticating with Google Sheets service account: {e}")
             raise
 
-    def get_latest_confessions_from_sheet(self, processed_ids_file="processed_confessions.json"):
+    def get_latest_confessions_from_sheet(self) -> List[Confession]:
         """
         Retrieves confessions from a Google Sheet, filtering out already processed ones.
         Assumes:
@@ -73,15 +75,23 @@ class GoogleFormReader:
             header_row = all_records[0]
             data_rows = all_records[1:] # Skip header row
 
-            filtered_rows = []
+            filtered_confessions = []
             for i, row in enumerate(reversed(data_rows)):
 
-                if row[2] != '':  # Stop if timestamp is too old
+                if row[2] != '':  # Stop if unprocessed
                     break
-                row.insert(0, total_rows - i)  # Append the row number for later reference
-                filtered_rows.append(row)
+                # row.insert(0, total_rows - i)  # Append the row number for later reference
+                confession = Confession(
+                    timestamp=row[0],  # Column A: timestamp
+                    row_num=total_rows - i,  # Row number (1-based index)
+                    text=row[1],  # Column B: confession text
+                    summary_caption=None,  # Optional fields, set to None for now
+                    sentiment=None,
+                    sigma_reply=None
+                )
+                filtered_confessions.append(confession)
 
-            return filtered_rows
+            return filtered_confessions
         
         except Exception as e:
             print(f"Error reading Google Sheet: {e}")

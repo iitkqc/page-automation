@@ -2,6 +2,8 @@ import google.generativeai as genai
 from google.generativeai import protos
 import os
 import json
+from model import Confession
+from typing import List
 
 class GeminiProcessor:
     def __init__(self):
@@ -12,14 +14,14 @@ class GeminiProcessor:
         genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
 
-    def select_top_confessions(self, confessions, max_count=4):
+    def select_top_confessions(self, confessions: List[Confession], max_count=4) -> List[Confession]:
         """
         Uses Gemini to select the top confessions based on creativity and potential reach.
         Returns a list of the selected confessions.
         """
         # Prepare the prompt with all confessions
         confessions_text = "\n\n".join([
-            f"Confession {i+1}:\n{conf['text']}\nSentiment: {conf['sentiment']}"
+            f"Confession {i+1}:\n{conf.text}\nSentiment: {conf.sentiment}"
             for i, conf in enumerate(confessions)
         ])
 
@@ -27,6 +29,12 @@ class GeminiProcessor:
         You are an expert social media content curator for IIT Kanpur. Your task is to select the most engaging confessions from the list below that will resonate deeply with the IITK student body and suitable for public sharing within the IITK community.
 
         **Selection criteria:**
+        * Creativity and originality: Consider the following aspects:
+            * **The confession should be **unique, creative, and original**. 
+            * **Avoid selecting multiple confessions that are too similar or repetitive. 
+            * **Avoid selecting cliche proposal and love confessions, select only if it narrates a good story around it.
+            * **Avoid selection of confessions that lack depth.
+            * **Avoid confessions that seems to written with the help of AI.
         * **IITK Relevance & Resonance:** The confession should deeply connect with **IITK student life**. Look for content that highlights:
             * **Campus-specific experiences** (e.g., convocation, yearbooks, fests, specific campus locations).
             * **Struggles or triumphs** related to courses, professors, exams, placements, college fests, clubs, inter-hall competitions, or other unique aspects of IITK life.
@@ -45,24 +53,36 @@ class GeminiProcessor:
         {confessions_text}
 
         Select up to {max_count} confessions that best fit the criteria above. 
-        Respond ONLY with a JSON array of the 1-based indices of your selections, e.g.: [2, 5, 1, 4]
+
+        Act as a charismatic, sigma senior admin of IITK with a deep understanding of campus culture. Optionally, include a list of witty, sigma-style admin replies for the selected confessions, but only if the replies are exceptionally clever and resonate with IITK vibes—otherwise, leave the replies field empty. 
+
+        Return your response as a JSON object with two fields:
+        - "indices": A JSON array of the 1-based indices of the selected confessions, e.g., [2, 5, 1, 4].
+        - "admin_replies": A JSON array of the same size as indices of admin replies (strings) corresponding to the selected confessions, keep the index empty string '' if no admin reply.
         """
 
         try:
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            model = genai.GenerativeModel('gemini-2.5-pro')
             response = model.generate_content(prompt)
-            selected_indices = json.loads(response.text.strip().replace('```json\n', '').replace('\n```', ''))
+            response_json = json.loads(response.text.strip().replace('```json\n', '').replace('\n```', ''))
+
+            selected_indices = response_json.get('indices', [])
+            admin_replies = response_json.get('admin_replies', [])
             
+            selected_confessions = []
             # Convert 1-based indices to 0-based and get selected confessions
-            selected_confessions = [confessions[i-1] for i in selected_indices]
+            for i in selected_indices:
+                confessions[i-1].sigma_reply = admin_replies[i-1] if i-1 < len(admin_replies) else ''
+                selected_confessions.append(confessions[i-1])
+
             return selected_confessions
 
         except Exception as e:
             print(f"Error selecting top confessions: {e}")
             # Fallback: return first max_count confessions
-            return confessions[:max_count]
+            return []
 
-    def moderate_and_shortlist_confession(self, confession_text):
+    def moderate_and_shortlist_confession(self, confession_text: str) -> dict:
         """
         Uses Gemini 1.5 Flash to moderate for hate speech and determine suitability.
         Returns a dictionary with 'is_safe', 'reason', 'processed_text', 'sentiment'.
@@ -79,7 +99,6 @@ class GeminiProcessor:
         - "rejection_reason": string (brief reason if not safe, empty string if safe)
         - "sentiment": string (Positive, Negative, Neutral, Mixed)
         - "summary_caption": string (concise summary suitable for Instagram along with some hashtags, max 50 words)
-        - "original_text": string (Original text with personal identifiers replaced by ****.)
         """
 
         try:
@@ -101,8 +120,7 @@ class GeminiProcessor:
                     'is_safe': False,
                     'rejection_reason': f"Blocked by Google's safety filters: {'; '.join(reasons)}",
                     'sentiment': 'N/A',
-                    'summary_caption': '',
-                    'original_text': confession_text  # Original text as fallback
+                    'summary_caption': ''
                 }
             
             if response._result.candidates[0].finish_reason == protos.Candidate.FinishReason.SAFETY:
@@ -113,8 +131,7 @@ class GeminiProcessor:
                     'is_safe': False,
                     'rejection_reason': f"Blocked by Google's safety filters: {'; '.join(reasons)}",
                     'sentiment': 'N/A',
-                    'summary_caption': '',
-                    'original_text': confession_text  # Original text as fallback
+                    'summary_caption': ''
                 }
 
             # Attempt to parse JSON response from Gemini
@@ -125,8 +142,7 @@ class GeminiProcessor:
                     'is_safe': gemini_output.get('is_safe', False),
                     'rejection_reason': gemini_output.get('rejection_reason', ''),
                     'sentiment': gemini_output.get('sentiment', 'Unknown'),
-                    'summary_caption': gemini_output.get('summary_caption', ''),
-                    'original_text': gemini_output.get('original_text', confession_text) # Fallback to original if not provided
+                    'summary_caption': gemini_output.get('summary_caption', '')
                 }
             except json.JSONDecodeError:
                 # Fallback if Gemini doesn't return perfect JSON
@@ -136,8 +152,7 @@ class GeminiProcessor:
                     'is_safe': True, # Assume safe if JSON parsing fails but no explicit block
                     'rejection_reason': "Gemini response parsing error (manual review advised).",
                     'sentiment': 'Unknown',
-                    'summary_caption': response.text[:50] + "..." if response.text else "", # Take first 50 chars as fallback
-                    'original_text': confession_text  # Fallback to original text
+                    'summary_caption': response.text[:50] + "..." if response.text else "" # Take first 50 chars as fallback
                 }
 
         except genai.types.BlockedPromptException as e:
@@ -146,8 +161,7 @@ class GeminiProcessor:
                 'is_safe': False,
                 'rejection_reason': f"Prompt blocked by safety settings: {e.response.prompt_feedback.safety_ratings}",
                 'sentiment': 'N/A',
-                'summary_caption': '',
-                'original_text': confession_text  # Fallback to original text
+                'summary_caption': ''
             }
         except Exception as e:
             print(f"Error calling Gemini API: {e}")
@@ -155,8 +169,7 @@ class GeminiProcessor:
                 'is_safe': False,
                 'rejection_reason': f"API error: {e}",
                 'sentiment': 'N/A',
-                'summary_caption': '',
-                'original_text': confession_text  # Fallback to original text
+                'summary_caption': ''
             }
 
 if __name__ == "__main__":

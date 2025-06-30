@@ -5,6 +5,8 @@ from datetime import datetime
 from google_form_reader import GoogleFormReader
 from gemini_processor import GeminiProcessor
 from insta_poster import InstagramPoster
+from model import Confession
+from typing import List
 
 class ConfessionAutomation:
     def __init__(self):
@@ -114,66 +116,64 @@ class ConfessionAutomation:
         print(f"Selected {len(shortlisted_posts)} top confessions for posting.")
 
         # Schedule posts
-        self.schedule_posts(shortlisted_posts, new_confessions)
-
-        # Cleanup
-        self.instagram_poster.delete_all_assets()
-        print(f"Confession automation finished at {datetime.now()}")
-
-    def moderate_confessions(self, new_confessions):
-        """Moderate confessions using Gemini and return safe ones."""
-        shortlisted_posts = []
-        
-        for confession in new_confessions:
-            print(f"\nProcessing confession ID: {confession[1]}")
-
-            if len(confession[2]) < 60:
-                print(f"Confession ID {confession[1]} is too short to process. Skipping.")
-                continue
-            
-            # Moderate and shortlist using Gemini
-            gemini_result = self.gemini_processor.moderate_and_shortlist_confession(confession[2])
-            
-            if gemini_result['is_safe']:
-                print(f"Confession deemed SAFE. Sentiment: {gemini_result['sentiment']}")
-                shortlisted_posts.append({
-                    'id': confession[1],
-                    'text': gemini_result['original_text'],
-                    'summary_caption': gemini_result['summary_caption'],
-                    'row_num': confession[0], # Keep track of original row for marking
-                    'sentiment': gemini_result['sentiment']
-                })
-            else:
-                print(f"Confession deemed UNSAFE: {gemini_result['rejection_reason']}")
-
-        print(f"\nFound {len(shortlisted_posts)} safe confessions.")
-        return shortlisted_posts
-
-    def schedule_posts(self, shortlisted_posts, new_confessions):
-        """Schedule posts using Instagram Graph API."""
-        for i, post_data in enumerate(shortlisted_posts):
-            print(f"Attempting to schedule post {i+1}/{len(shortlisted_posts)}...")
-            count = self.google_reader.get_count()
-            
-            # Use the Instagram poster to schedule the post
-            if self.instagram_poster.schedule_instagram_post(post_data, count + 1):
-                print(f"Successfully scheduled confession ID: {post_data['id']} to Instagram!")
-                # Mark as processed in sheet with status 1 (success)
-                self.google_reader.increment_count()
-                self.google_reader.mark_confession_as_processed(post_data['row_num'], 1)
-            else:
-                print(f"Failed to schedule post for confession ID: {post_data['id']}")
-                # Mark as processed in sheet with status 0 (failed)
-                self.google_reader.mark_confession_as_processed(post_data['row_num'], 0)
+        self.schedule_posts(shortlisted_posts)
 
         # Mark unpublished rows to 0
         total_rows = [item[0] for item in new_confessions]
-        posted_rows = [item.get("row_num") for item in shortlisted_posts]
+        posted_rows = [item.row_num for item in shortlisted_posts]
 
         not_posted_rows = set(total_rows) - set(posted_rows)
         for row in not_posted_rows:
             self.google_reader.mark_confession_as_processed(row, 0)
             print(f"Marked row {row} as NOT POSTED in Google Sheet.")
+
+        # Cleanup
+        self.instagram_poster.delete_all_assets()
+        print(f"Confession automation finished at {datetime.now()}")
+
+    def moderate_confessions(self, new_confessions: List[Confession]) -> List[Confession]:
+        """Moderate confessions using Gemini and return safe ones."""
+        shortlisted_confessions = []
+        
+        for confession in new_confessions:
+            print(f"\nProcessing confession ID: {confession.timestamp}")
+
+            if len(confession.text) < 60:
+                print(f"Confession ID {confession.timestamp} is too short to process. Skipping.")
+                continue
+            
+            # Moderate and shortlist using Gemini
+            gemini_result = self.gemini_processor.moderate_and_shortlist_confession(confession.text)
+
+            
+            if gemini_result['is_safe']:
+                print(f"Confession deemed SAFE. Sentiment: {gemini_result['sentiment']}")
+                confession.sentiment = gemini_result['sentiment']
+                confession.summary_caption = gemini_result['summary_caption']
+                shortlisted_confessions.append(confession)
+            else:
+                print(f"Confession deemed UNSAFE: {gemini_result['rejection_reason']}")
+
+        print(f"\nFound {len(shortlisted_confessions)} safe confessions.")
+        return shortlisted_confessions
+
+    def schedule_posts(self, shortlisted_posts: List[Confession]):
+        """Schedule posts using Instagram Graph API."""
+        for i, post_data in enumerate(shortlisted_posts):
+            print(f"Attempting to schedule post {i+1}/{len(shortlisted_posts)}...")
+            count = self.google_reader.get_count()
+            post_data.count = count + 1
+            
+            # Use the Instagram poster to schedule the post
+            if self.instagram_poster.schedule_instagram_post(post_data):
+                print(f"Successfully scheduled confession ID: {post_data.timestamp} to Instagram!")
+                # Mark as processed in sheet with status 1 (success)
+                self.google_reader.increment_count()
+                self.google_reader.mark_confession_as_processed(post_data.row_num, 1)
+            else:
+                print(f"Failed to schedule post for confession ID: {post_data.timestamp}")
+                # Mark as processed in sheet with status 0 (failed)
+                self.google_reader.mark_confession_as_processed(post_data.row_num, 0)        
 
 def main():
     """Main function to run the confession automation."""
