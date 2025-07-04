@@ -72,8 +72,8 @@ class GeminiProcessor:
             
             selected_confessions = []
             # Convert 1-based indices to 0-based and get selected confessions
-            for i in selected_indices:
-                confessions[i-1].sigma_reply = admin_replies[i-1] if i-1 < len(admin_replies) else ''
+            for j , i in enumerate(selected_indices):
+                confessions[i-1].sigma_reply = admin_replies[j] if i-1 < len(admin_replies) else ''
                 selected_confessions.append(confessions[i-1])
 
             return selected_confessions

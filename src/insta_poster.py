@@ -313,7 +313,7 @@ class InstagramPoster:
         carousel_params = {
             'media_type': 'CAROUSEL',
             'children': ','.join(media_ids),
-            'caption': f"{f'Admin reply: {sigma_reply}\n' if sigma_reply else ''} \n\n Summary: {caption} \n\n#IITKQuickConfessions #IITKConfessions #confession #iitk #iitkanpur #iit #jee #jeeadvanced #jeemains",
+            'caption': f"{f'Admin reply: {sigma_reply}\n' if sigma_reply else {caption}} \n\n#IITKQuickConfessions #IITKConfessions #confession #iitk #iitkanpur #iit #jee #jeeadvanced #jeemains",
             'access_token': self.access_token
         }
         
@@ -338,7 +338,7 @@ class InstagramPoster:
         }
         data = {
             'image_url': image_url,
-            'caption': f"{f'Admin reply: {sigma_reply}\n' if sigma_reply else ''} \n\n Summary: {caption} \n\n#IITKQuickConfessions #IITKConfessions #confession #iitk #iitkanpur #iit #jee #jeeadvanced #jeemains",
+            'caption': f"{f'Admin reply: {sigma_reply}\n' if sigma_reply else {caption}}  \n\n#IITKQuickConfessions #IITKConfessions #confession #iitk #iitkanpur #iit #jee #jeeadvanced #jeemains",
         }
         
         try:
