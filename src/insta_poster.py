@@ -90,31 +90,60 @@ class ConfessionImageGenerator:
         current_slide = ""
         
         for sentence in sentences:
-            # If adding this sentence would exceed limit, start new slide
-            if len(current_slide) + len(sentence) + 2 > self.max_chars_per_slide:
-                if current_slide:
-                    slides.append(current_slide.strip())
-                    current_slide = sentence + "."
-                else:
-                    # Single sentence is too long, force split
-                    words = sentence.split()
-                    temp_slide = ""
-                    for word in words:
-                        if len(temp_slide) + len(word) + 1 > self.max_chars_per_slide:
-                            if temp_slide:
-                                slides.append(temp_slide.strip())
-                                temp_slide = word
-                            else:
-                                # Single word too long, truncate
-                                slides.append(word[:self.max_chars_per_slide-3] + "...")
-                                temp_slide = ""
+            # If sentence is too long, split by commas
+            if len(sentence) > self.max_chars_per_slide:
+                comma_chunks = sentence.split(',')
+                comma_chunks = [c.strip() for c in comma_chunks if c.strip()]
+                for chunk in comma_chunks:
+                    if len(current_slide) + len(chunk) + 2 > self.max_chars_per_slide:
+                        if current_slide:
+                            slides.append(current_slide.strip())
+                            current_slide = chunk + ","
                         else:
-                            temp_slide += " " + word if temp_slide else word
-                    if temp_slide:
-                        current_slide = temp_slide + "."
+                            # Single chunk is too long, split by words
+                            words = chunk.split()
+                            temp_slide = ""
+                            for word in words:
+                                if len(temp_slide) + len(word) + 1 > self.max_chars_per_slide:
+                                    if temp_slide:
+                                        slides.append(temp_slide.strip() + ",")
+                                        temp_slide = word
+                                    else:
+                                        # Single word too long, truncate
+                                        slides.append(word[:self.max_chars_per_slide-3] + "...")
+                                        temp_slide = ""
+                                else:
+                                    temp_slide += " " + word if temp_slide else word
+                            if temp_slide:
+                                current_slide = temp_slide + ","
+                    else:
+                        current_slide += " " + chunk + "," if current_slide else chunk + ","
             else:
-                current_slide += " " + sentence + "." if current_slide else sentence + "."
-        
+                # Normal sentence handling
+                if len(current_slide) + len(sentence) + 2 > self.max_chars_per_slide:
+                    if current_slide:
+                        slides.append(current_slide.strip())
+                        current_slide = sentence + "."
+                    else:
+                        # Single sentence is too long, split by words
+                        words = sentence.split()
+                        temp_slide = ""
+                        for word in words:
+                            if len(temp_slide) + len(word) + 1 > self.max_chars_per_slide:
+                                if temp_slide:
+                                    slides.append(temp_slide.strip() + ".")
+                                    temp_slide = word
+                                else:
+                                    # Single word too long, truncate
+                                    slides.append(word[:self.max_chars_per_slide-3] + "...")
+                                    temp_slide = ""
+                            else:
+                                temp_slide += " " + word if temp_slide else word
+                        if temp_slide:
+                            current_slide = temp_slide + "."
+                else:
+                    current_slide += " " + sentence + "." if current_slide else sentence + "."
+
         if current_slide:
             slides.append(current_slide.strip())
         
