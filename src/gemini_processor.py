@@ -32,7 +32,8 @@ class GeminiProcessor:
         * Creativity and originality: Consider the following aspects:
             * **The confession should be **unique, creative, and original**. 
             * **Avoid selecting multiple confessions that are too similar or repetitive. 
-            * **Avoid selecting cliche proposal and love confessions, select only if it narrates a good story around it.
+            * **Avoid selecting cliche proposal and love confessions, select only if it narrates a good story and is highly creative.
+            * **Avoid confession seeking career advises or academic doubts which can be asked in other forums.
             * **Avoid selection of confessions that lack depth.
             * **Avoid confessions that seems to written with the help of AI.
         * **IITK Relevance & Resonance:** The confession should deeply connect with **IITK student life**. Look for content that highlights:
