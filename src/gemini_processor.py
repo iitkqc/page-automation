@@ -12,7 +12,7 @@ class GeminiProcessor:
         if not self.api_key:
             raise ValueError("GOOGLE_API_KEY environment variable not set.")
         genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
 
     def select_top_confessions(self, confessions: List[Confession], max_count=4) -> List[Confession]:
         """
@@ -63,7 +63,7 @@ class GeminiProcessor:
         """
 
         try:
-            model = genai.GenerativeModel('gemini-2.5-pro')
+            model = genai.GenerativeModel('gemini-3-flash')
             response = model.generate_content(prompt)
             response_json = json.loads(response.text.strip().replace('```json\n', '').replace('\n```', ''))
 
