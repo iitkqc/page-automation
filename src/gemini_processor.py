@@ -81,10 +81,10 @@ class GeminiProcessor:
 
         return selected_confessions
 
-    def moderate_and_shortlist_confession(self, confession_text: str) -> dict:
+    def moderate_and_shortlist_confession(self, confession_text: str) -> ModerationResponse:
         """
         Uses Gemini 1.5 Flash to moderate for hate speech and determine suitability.
-        Returns a dictionary with 'is_safe', 'reason', 'processed_text', 'sentiment'.
+        Returns a ModerationResponse dataclass with is_safe, rejection_reason, sentiment, and summary_caption.
         """
         prompt = f"""
         Analyze the following confession text for hate speech, harassment, sexually explicit content, and dangerous content.
@@ -131,12 +131,7 @@ class GeminiProcessor:
         
         result: ModerationResponse = response.parsed
         
-        return {
-            'is_safe': result.is_safe,
-            'rejection_reason': result.rejection_reason,
-            'sentiment': result.sentiment,
-            'summary_caption': result.summary_caption
-        }
+        return result
 
 if __name__ == "__main__":
     from dotenv import load_dotenv

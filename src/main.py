@@ -5,7 +5,7 @@ from datetime import datetime
 from google_form_reader import GoogleFormReader
 from gemini_processor import GeminiProcessor
 from insta_poster import InstagramPoster
-from model import Confession
+from model import Confession, ModerationResponse
 from typing import List
 
 class ConfessionAutomation:
@@ -140,16 +140,16 @@ class ConfessionAutomation:
                 continue
             
             # Moderate and shortlist using Gemini
-            gemini_result = self.gemini_processor.moderate_and_shortlist_confession(confession.text)
+            gemini_result: ModerationResponse = self.gemini_processor.moderate_and_shortlist_confession(confession.text)
 
             
-            if gemini_result['is_safe']:
-                print(f"Confession deemed SAFE. Sentiment: {gemini_result['sentiment']}")
-                confession.sentiment = gemini_result['sentiment']
-                confession.summary_caption = gemini_result['summary_caption']
+            if gemini_result.is_safe:
+                print(f"Confession deemed SAFE. Sentiment: {gemini_result.sentiment}")
+                confession.sentiment = gemini_result.sentiment
+                confession.summary_caption = gemini_result.summary_caption
                 shortlisted_confessions.append(confession)
             else:
-                print(f"Confession deemed UNSAFE: {gemini_result['rejection_reason']}")
+                print(f"Confession deemed UNSAFE: {gemini_result.rejection_reason}")
 
         print(f"\nFound {len(shortlisted_confessions)} safe confessions.")
         return shortlisted_confessions
