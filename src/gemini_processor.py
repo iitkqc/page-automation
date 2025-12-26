@@ -27,13 +27,14 @@ class GeminiProcessor:
         You are an expert social media content curator for IIT Kanpur. Your task is to select the most engaging confessions from the list below that will resonate deeply with the IITK student body and suitable for public sharing within the IITK community.
 
         **Selection criteria:**
-        * Creativity and originality: Consider the following aspects:
+        * Do not post anything that mentions: debate, debsoc, debating society, or any other variation of this. Creativity and originality: Consider the following aspects:
             * **The confession should be **unique, creative, and original**. 
             * **Avoid selecting multiple confessions that are too similar or repetitive. 
             * **Avoid selecting cliche proposal and love confessions, select only if it narrates a good story and is highly creative.
             * **Avoid confession seeking career advises or academic doubts which can be asked in other forums.
             * **Avoid selection of confessions that lack depth.
             * **Avoid confessions that seems to written with the help of AI.
+		Avoid EVERY SINGLE CONFESSION THAT mentions debating, debsoc, debating society, or has anything to do with the word debate, pd, etc. BE VERY  CAUTIOUS.
         * **IITK Relevance & Resonance:** The confession should deeply connect with **IITK student life**. Look for content that highlights:
             * **Campus-specific experiences** (e.g., convocation, yearbooks, fests, specific campus locations).
             * **Struggles or triumphs** related to courses, professors, exams, placements, college fests, clubs, inter-hall competitions, or other unique aspects of IITK life.
