@@ -112,17 +112,24 @@ class ConfessionAutomation:
         )
         print(f"Selected {len(shortlisted_posts)} top confessions for posting.")
 
-        # Schedule posts
-        self.schedule_posts(shortlisted_posts)
+        # Schedule posts and track which ones were attempted
+        attempted_rows = self.schedule_posts(shortlisted_posts)
 
-        # Mark unpublished rows to 0
-        total_rows = [item.row_num for item in new_confessions]
-        posted_rows = [item.row_num for item in shortlisted_posts]
-
-        not_posted_rows = set(total_rows) - set(posted_rows)
-        for row in not_posted_rows:
-            self.google_reader.mark_confession_as_processed(row, 0)
-            print(f"Marked row {row} as NOT POSTED in Google Sheet.")
+        # Only mark confessions as 0 if the system processed at least one post
+        # This prevents marking everyone as 0 in case of system-wide failure
+        if attempted_rows:
+            # Mark confessions that were in new_confessions but not selected for posting
+            # (rejected during moderation/selection)
+            total_rows = [item.row_num for item in new_confessions]
+            shortlisted_rows = [item.row_num for item in shortlisted_posts]
+            
+            # Confessions that were never selected for posting (rejected)
+            rejected_rows = set(total_rows) - set(shortlisted_rows)
+            for row in rejected_rows:
+                self.google_reader.mark_confession_as_processed(row, 0)
+                print(f"Marked row {row} as NOT POSTED (rejected during selection) in Google Sheet.")
+        else:
+            print("No posts were attempted. System may have failed. Not marking confessions as processed.")
 
         # Cleanup
         self.instagram_poster.delete_all_assets()
@@ -154,23 +161,38 @@ class ConfessionAutomation:
         print(f"\nFound {len(shortlisted_confessions)} safe confessions.")
         return shortlisted_confessions
 
-    def schedule_posts(self, shortlisted_posts: List[Confession]):
-        """Schedule posts using Instagram Graph API."""
+    def schedule_posts(self, shortlisted_posts: List[Confession]) -> set:
+        """
+        Schedule posts using Instagram Graph API.
+        Returns a set of row numbers that were attempted (successfully or not).
+        """
+        attempted_rows = set()
+        
         for i, post_data in enumerate(shortlisted_posts):
             print(f"Attempting to schedule post {i+1}/{len(shortlisted_posts)}...")
             count = self.google_reader.get_count()
             post_data.count = count + 1
             
-            # Use the Instagram poster to schedule the post
-            if self.instagram_poster.schedule_instagram_post(post_data):
-                print(f"Successfully scheduled confession ID: {post_data.timestamp} to Instagram!")
-                # Mark as processed in sheet with status 1 (success)
-                self.google_reader.increment_count()
-                self.google_reader.mark_confession_as_processed(post_data.row_num, 1)
-            else:
-                print(f"Failed to schedule post for confession ID: {post_data.timestamp}")
-                # Mark as processed in sheet with status 0 (failed)
-                self.google_reader.mark_confession_as_processed(post_data.row_num, 0)        
+            try:
+                # Use the Instagram poster to schedule the post
+                if self.instagram_poster.schedule_instagram_post(post_data):
+                    print(f"Successfully scheduled confession ID: {post_data.timestamp} to Instagram!")
+                    # Mark as processed in sheet with status 1 (success)
+                    self.google_reader.increment_count()
+                    self.google_reader.mark_confession_as_processed(post_data.row_num, 1)
+                    attempted_rows.add(post_data.row_num)
+                else:
+                    print(f"Failed to schedule post for confession ID: {post_data.timestamp}")
+                    # Mark as processed in sheet with status 0 (failed)
+                    self.google_reader.mark_confession_as_processed(post_data.row_num, 0)
+                    attempted_rows.add(post_data.row_num)
+            except Exception as e:
+                print(f"Error scheduling post for confession ID: {post_data.timestamp}: {e}")
+                # Mark as attempted but failed
+                attempted_rows.add(post_data.row_num)
+                self.google_reader.mark_confession_as_processed(post_data.row_num, 0)
+        
+        return attempted_rows        
 
 def main():
     """Main function to run the confession automation."""
