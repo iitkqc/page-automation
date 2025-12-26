@@ -17,37 +17,13 @@ class ConfessionImageGenerator:
         self.max_chars_per_slide = 400  # Adjust based on readability
     
     def load_fonts(self):
-        """Load fonts with fallback options"""
+        """Load NotoSansDevanagari font"""
         try:
-            # Try different font paths
-            font_paths = [
-                "/System/Library/Fonts/Arial.ttf",  # macOS
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
-                "C:/Windows/Fonts/arial.ttf",  # Windows
-                "arial.ttf"  # Local
-            ]
-            # TODO: Add hindi fonts, hindi fonts are not working now
-            
-            font_large = None
-            font_medium = None
-            font_small = None
-            
-            for path in font_paths:
-                try:
-                    font_large = ImageFont.truetype(path, 50)
-                    font_medium = ImageFont.truetype(path, 32)
-                    font_small = ImageFont.truetype(path, 24)
-                    break
-                except:
-                    continue
-            
-            if not font_large:
-                font_large = ImageFont.load_default()
-                font_medium = ImageFont.load_default()
-                font_small = ImageFont.load_default()
-                
+            font_path = "assets/NotoSansDevanagari-Regular.ttf"
+            font_large = ImageFont.truetype(font_path, 50)
+            font_medium = ImageFont.truetype(font_path, 32)
+            font_small = ImageFont.truetype(font_path, 24)
             return font_large, font_medium, font_small
-            
         except Exception as e:
             print(f"Font loading error: {e}")
             default_font = ImageFont.load_default()
@@ -190,6 +166,114 @@ class ConfessionImageGenerator:
         
         # Save image
         filename = f"confession_{self.confession.row_num}_slide_{slide_num}.png"
+        image_path = os.path.join(IMAGE_OUTPUT_DIR, filename)
+        img.save(image_path, quality=95, optimize=True)
+        
+        return image_path
+    
+    def create_reel_image(self, text: str, colors: dict) -> str:
+        """Create a 9:16 reel image with larger font size"""
+        # Load NotoSansDevanagari font with larger sizes for reel
+        try:
+            font_path = "assets/NotoSansDevanagari-Regular.ttf"
+            font_reel_large = ImageFont.truetype(font_path, 70)
+            font_reel_medium = ImageFont.truetype(font_path, 45)
+            font_reel_small = ImageFont.truetype(font_path, 30)
+        except Exception as e:
+            print(f"Font loading error: {e}")
+            font_reel_large = ImageFont.load_default()
+            font_reel_medium = ImageFont.load_default()
+            font_reel_small = ImageFont.load_default()
+        
+        # 9:16 aspect ratio (1080x1920)
+        reel_width = 1080
+        reel_height = 1920
+        
+        # Calculate 10% padding on left and right
+        padding_percent = 0.10
+        padding_x = int(reel_width * padding_percent)  # 108 pixels on each side
+        available_width = reel_width - (2 * padding_x)  # 864 pixels available for text
+        
+        # Create background
+        img = Image.new('RGB', (reel_width, reel_height), color=colors['bg'])
+        draw = ImageDraw.Draw(img)
+        
+        # Wrap text based on actual pixel width with padding
+        def wrap_text_by_width(text, font, max_width):
+            """Wrap text to fit within max_width pixels"""
+            words = text.split()
+            lines = []
+            current_line = []
+            
+            for word in words:
+                # Test if adding this word would exceed the width
+                test_line = ' '.join(current_line + [word])
+                bbox = draw.textbbox((0, 0), test_line, font=font)
+                test_width = bbox[2] - bbox[0]
+                
+                if test_width <= max_width:
+                    current_line.append(word)
+                else:
+                    if current_line:
+                        lines.append(' '.join(current_line))
+                    # Check if single word is too long
+                    word_bbox = draw.textbbox((0, 0), word, font=font)
+                    word_width = word_bbox[2] - word_bbox[0]
+                    if word_width > max_width:
+                        # Word is too long, need to break it
+                        chars = list(word)
+                        temp_word = ""
+                        for char in chars:
+                            test_char = temp_word + char
+                            char_bbox = draw.textbbox((0, 0), test_char, font=font)
+                            char_width = char_bbox[2] - char_bbox[0]
+                            if char_width > max_width and temp_word:
+                                lines.append(temp_word)
+                                temp_word = char
+                            else:
+                                temp_word += char
+                        if temp_word:
+                            current_line = [temp_word]
+                        else:
+                            current_line = []
+                    else:
+                        current_line = [word]
+            
+            if current_line:
+                lines.append(' '.join(current_line))
+            
+            return lines
+        
+        # Wrap text to fit within available width
+        lines = wrap_text_by_width(text, font_reel_large, available_width)
+        
+        # Calculate text positioning
+        line_height = 85  # Larger line height for reel
+        total_text_height = len(lines) * line_height
+        start_y = (reel_height - total_text_height) // 2
+        
+        # Draw text with padding
+        for i, line in enumerate(lines):
+            # Calculate x position for center alignment within padded area
+            text_bbox = draw.textbbox((0, 0), line, font=font_reel_large)
+            text_width = text_bbox[2] - text_bbox[0]
+            x = padding_x + (available_width - text_width) // 2  # Center within padded area
+            y = start_y + (i * line_height)
+            
+            draw.text((x, y), line, font=font_reel_large, fill=colors['text'])
+        
+        # Add watermark
+        watermark = "IITK QUICK CONFESSIONS"
+        draw.text((reel_width // 2, 300), 
+                    watermark, font=font_reel_medium, fill=colors['accent'], anchor="mm")
+        
+        # Add confession ID and count
+        id_text = f"#{self.confession.count}"
+        draw.text((reel_width // 2, 360), 
+                id_text, font=font_reel_medium, fill=colors['accent'], anchor="mm")
+        
+        # Save image
+        filename = f"confession_{self.confession.row_num}_reel.png"
         image_path = os.path.join(IMAGE_OUTPUT_DIR, filename)
         img.save(image_path, quality=95, optimize=True)
         

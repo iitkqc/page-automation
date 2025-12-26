@@ -5,9 +5,10 @@ import cloudinary
 import cloudinary.api
 from cloudinary.exceptions import Error
 import cloudinary.uploader
-from typing import List, Dict
+from typing import List
 from model import Confession
 from confession_image_generator import ConfessionImageGenerator
+from reel_generator import FfmpegReelGenerator
 
 # --- Configuration ---
 FB_GRAPH_API_BASE = "https://graph.instagram.com/v21.0"
@@ -52,15 +53,32 @@ class InstagramPoster:
         
         return public_urls
 
+    def upload_video_to_cloudinary(self, video_path: str, row_num: int) -> str:
+        """Upload video to Cloudinary and return URL"""
+        try:
+            public_id = f"confessions/confession_{row_num}_reel"
+            response = cloudinary.uploader.upload(
+                video_path,
+                public_id=public_id,
+                overwrite=True,
+                resource_type="video"
+            )
+            print(f"Uploaded reel to Cloudinary: {response['secure_url']}")
+            return response['secure_url']
+        except Exception as e:
+            print(f"Error uploading reel to Cloudinary: {e}")
+            return ""
+
     def create_instagram_carousel(self, image_urls: List[str], caption: str | None, sigma_reply: str | None) -> str:
         """Create Instagram carousel post"""
         if not self.instagram_page_id or not self.access_token:
             print("Instagram API credentials not set.")
             return ""
         
-        # For single image, use regular post
-        if len(image_urls) == 1:
-            return self.create_single_instagram_post(image_urls[0], caption, sigma_reply)
+        # Carousel requires at least 2 images
+        if len(image_urls) < 2:
+            print("Carousel requires at least 2 images.")
+            return ""
         
         # Create carousel container
         url = f"{self.fb_graph_api_base}/me/media"
@@ -108,8 +126,12 @@ class InstagramPoster:
             print(f"Response: {response.text}")
             return ""
 
-    def create_single_instagram_post(self, image_url: str, caption: str | None, sigma_reply: str | None) -> str:
-        """Create single Instagram post"""
+    def create_instagram_reel(self, video_url: str, caption: str | None, sigma_reply: str | None) -> str:
+        """Create Instagram reel post"""
+        if not self.instagram_page_id or not self.access_token:
+            print("Instagram API credentials not set.")
+            return ""
+        
         url = f"{self.fb_graph_api_base}/{self.instagram_page_id}/media"
         
         headers = {
@@ -117,7 +139,8 @@ class InstagramPoster:
             "Authorization": f"Bearer {self.access_token}"
         }
         data = {
-            'image_url': image_url,
+            'media_type': 'REELS',
+            'video_url': video_url,
             'caption': f"{f'Admin reply: {sigma_reply}\n' if sigma_reply else caption}  \n\n#IITKQuickConfessions #IITKConfessions #confession #iitk #iitkanpur #iit #jee #jeeadvanced #jeemains",
         }
         
@@ -125,10 +148,12 @@ class InstagramPoster:
             response = requests.post(url, headers=headers, json=data)
             response.raise_for_status()
             media_container_id = response.json().get('id', '')
-            print(f"Media container created with")
+            print(f"Reel media container created: {media_container_id}")
             return media_container_id
         except requests.exceptions.RequestException as e:
-            print(f"Error creating media container: {e}")
+            print(f"Error creating reel media container: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                print(f"Response: {e.response.text}")
             return ""
 
     def publish_instagram_post(self, media_container_id: str) -> bool:
@@ -159,41 +184,115 @@ class InstagramPoster:
         # Initialize image generator
         generator = ConfessionImageGenerator(confession)
         
-        # Generate images (single or carousel)
-        image_paths = generator.generate_confession_images()
+        # Check if text will generate only one slide
+        slides = generator.split_text_into_slides()
+        is_single_slide = len(slides) == 1
         
-        if not image_paths:
-            print("Failed to generate images.")
-            return False
-        
-        # Upload to Cloudinary
-        public_urls = self.upload_images_to_cloudinary(image_paths, confession.row_num)
-        if not public_urls:
-            print("Failed to upload images to Cloudinary")
-            return False
-        
-        # Create Instagram post (single or carousel)
-        if len(public_urls) == 1:
-            media_container_id = self.create_single_instagram_post(public_urls[0], confession.summary_caption, confession.sigma_reply)
-        else:
-            media_container_id = self.create_instagram_carousel(public_urls, confession.summary_caption, confession.sigma_reply)
-        
-        if media_container_id:
-            print("Waiting for Instagram to process media...")
-            time.sleep(20)  # Give Instagram time to process
+        if is_single_slide:
+            # Create reel for single slide
+            print("Single slide detected. Creating reel...")
             
-            success = self.publish_instagram_post(media_container_id)
-            if success:
-                print(f"Successfully posted confession {confession.timestamp} to Instagram!")
-                # Clean up local images
-                for image_path in image_paths:
+            # Generate reel image (9:16 with larger font)
+            color_scheme = {
+                'bg': (0, 0, 0),
+                'text': (255, 255, 255),
+                'accent': (220, 220, 220),
+            }
+            reel_image_path = generator.create_reel_image(slides[0], color_scheme)
+            
+            if not reel_image_path:
+                print("Failed to generate reel image.")
+                return False
+            
+            # Generate reel video using FFmpeg
+            reel_output_path = os.path.join("generated_images", f"confession_{confession.row_num}_reel.mp4")
+            audio_path = "assets/audio1.mp3"
+            
+            reel_gen = FfmpegReelGenerator(reel_image_path, reel_output_path, audio_path)
+            reel_video_path = reel_gen.create_reel()
+            
+            if not reel_video_path:
+                print("Failed to generate reel video.")
+                # Clean up reel image
+                try:
+                    os.remove(reel_image_path)
+                except:
+                    pass
+                return False
+            
+            # Upload reel to Cloudinary
+            reel_url = self.upload_video_to_cloudinary(reel_video_path, confession.row_num)
+            if not reel_url:
+                print("Failed to upload reel to Cloudinary")
+                # Clean up local files
+                try:
+                    os.remove(reel_image_path)
+                    os.remove(reel_video_path)
+                except:
+                    pass
+                return False
+            
+            # Create Instagram reel post
+            media_container_id = self.create_instagram_reel(reel_url, confession.summary_caption, confession.sigma_reply)
+            
+            if media_container_id:
+                print("Waiting for Instagram to process reel...")
+                time.sleep(30)  # Reels may need more time to process
+                
+                success = self.publish_instagram_post(media_container_id)
+                if success:
+                    print(f"Successfully posted reel for confession {confession.timestamp} to Instagram!")
+                    # Clean up local files
                     try:
-                        os.remove(image_path)
+                        os.remove(reel_image_path)
+                        os.remove(reel_video_path)
                     except:
                         pass
-                return True
-        
-        return False
+                    return True
+            
+            # Clean up on failure
+            try:
+                os.remove(reel_image_path)
+                os.remove(reel_video_path)
+            except:
+                pass
+            return False
+        else:
+            # Multiple slides - create carousel
+            print("Multiple slides detected. Creating carousel...")
+            
+            # Generate images (carousel)
+            image_paths = generator.generate_confession_images()
+            
+            if not image_paths:
+                print("Failed to generate images.")
+                return False
+            
+            # Upload to Cloudinary
+            public_urls = self.upload_images_to_cloudinary(image_paths, confession.row_num)
+            if not public_urls:
+                print("Failed to upload images to Cloudinary")
+                return False
+            
+            # Create Instagram carousel
+            media_container_id = self.create_instagram_carousel(public_urls, confession.summary_caption, confession.sigma_reply)
+            
+            if media_container_id:
+                print("Waiting for Instagram to process media...")
+                time.sleep(20)  # Give Instagram time to process
+                
+                success = self.publish_instagram_post(media_container_id)
+                if success:
+                    print(f"Successfully posted confession {confession.timestamp} to Instagram!")
+                    # Clean up local images
+                    for image_path in image_paths:
+                        try:
+                            os.remove(image_path)
+                        except:
+                            pass
+                    return True
+            
+            return False
 
     def refresh_instagram_access_token(self) -> str:
         """Refresh the Instagram access token if needed"""
