@@ -1,8 +1,7 @@
-import google.generativeai as genai
-from google.generativeai import protos
+from google import genai
+from google.genai.types import GenerateContentConfig, SafetySetting, HarmCategory, HarmBlockThreshold
 import os
-import json
-from model import Confession
+from model import Confession, ConfessionSelectionResponse, ModerationResponse
 from typing import List
 
 class GeminiProcessor:
@@ -11,8 +10,7 @@ class GeminiProcessor:
         self.api_key = os.getenv("GOOGLE_API_KEY")
         if not self.api_key:
             raise ValueError("GOOGLE_API_KEY environment variable not set.")
-        genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
+        self.client = genai.Client(api_key=self.api_key)
 
     def select_top_confessions(self, confessions: List[Confession], max_count=4) -> List[Confession]:
         """
@@ -62,26 +60,26 @@ class GeminiProcessor:
         - "admin_replies": A JSON array of the same size as indices of admin replies (strings) corresponding to the selected confessions, keep the index empty string '' if no admin reply.
         """
 
-        try:
-            model = genai.GenerativeModel('gemini-3-flash')
-            response = model.generate_content(prompt)
-            response_json = json.loads(response.text.strip().replace('```json\n', '').replace('\n```', ''))
+        config = GenerateContentConfig(
+            response_mime_type='application/json',
+            response_schema=ConfessionSelectionResponse,
+        )
+        
+        response = self.client.models.generate_content(
+            model=os.getenv('SHORTLISTING_MODEL'),
+            contents=prompt,
+            config=config
+        )
 
-            selected_indices = response_json.get('indices', [])
-            admin_replies = response_json.get('admin_replies', [])
-            
-            selected_confessions = []
-            # Convert 1-based indices to 0-based and get selected confessions
-            for j , i in enumerate(selected_indices):
-                confessions[i-1].sigma_reply = admin_replies[j] if i-1 < len(admin_replies) else ''
-                selected_confessions.append(confessions[i-1])
+        result: ConfessionSelectionResponse = response.parsed
+        
+        selected_confessions = []
+        # Convert 1-based indices to 0-based and get selected confessions
+        for j , i in enumerate(result.indices):
+            confessions[i-1].sigma_reply = result.admin_replies[j] if i-1 < len(result.admin_replies) else ''
+            selected_confessions.append(confessions[i-1])
 
-            return selected_confessions
-
-        except Exception as e:
-            print(f"Error selecting top confessions: {e}")
-            # Fallback: return first max_count confessions
-            return []
+        return selected_confessions
 
     def moderate_and_shortlist_confession(self, confession_text: str) -> dict:
         """
@@ -102,76 +100,43 @@ class GeminiProcessor:
         - "summary_caption": string (concise summary suitable for Instagram along with some hashtags, max 50 words)
         """
 
-        try:
-            response = self.model.generate_content(prompt, safety_settings={
-                'HARM_CATEGORY_HARASSMENT': 'BLOCK_LOW_AND_ABOVE',
-                'HARM_CATEGORY_HATE_SPEECH': 'BLOCK_LOW_AND_ABOVE',
-                'HARM_CATEGORY_SEXUALLY_EXPLICIT': 'BLOCK_LOW_AND_ABOVE',
-                'HARM_CATEGORY_DANGEROUS_CONTENT': 'BLOCK_LOW_AND_ABOVE',
-            },
-            request_options={'timeout': 60} # Added timeout for robustness
-            )
-            
-            # Check if the content was blocked by safety settings
-            if not response._result.candidates:
-                # Content was blocked by safety settings before even reaching the model logic
-                safety_feedback = response._result.prompt_feedback.safety_ratings
-                reasons = [f"{s.category}: {s.probability}" for s in safety_feedback if s.blocked]
-                return {
-                    'is_safe': False,
-                    'rejection_reason': f"Blocked by Google's safety filters: {'; '.join(reasons)}",
-                    'sentiment': 'N/A',
-                    'summary_caption': ''
-                }
-            
-            if response._result.candidates[0].finish_reason == protos.Candidate.FinishReason.SAFETY:
-                # Content was blocked by safety settings after model processing
-                safety_feedback = response._result.prompt_feedback.safety_ratings
-                reasons = [f"{s.category}: {s.probability}" for s in safety_feedback if s.blocked]
-                return {
-                    'is_safe': False,
-                    'rejection_reason': f"Blocked by Google's safety filters: {'; '.join(reasons)}",
-                    'sentiment': 'N/A',
-                    'summary_caption': ''
-                }
-
-            # Attempt to parse JSON response from Gemini
-            try:
-                clean_json = response.text.strip().replace('```json\n', '').replace('\n```', '')
-                gemini_output = json.loads(clean_json)
-                return {
-                    'is_safe': gemini_output.get('is_safe', False),
-                    'rejection_reason': gemini_output.get('rejection_reason', ''),
-                    'sentiment': gemini_output.get('sentiment', 'Unknown'),
-                    'summary_caption': gemini_output.get('summary_caption', '')
-                }
-            except json.JSONDecodeError:
-                # Fallback if Gemini doesn't return perfect JSON
-                print(f"Warning: Gemini did not return perfect JSON. Raw response: {response.text}")
-                # You might need to refine the prompt or use a more robust parsing
-                return {
-                    'is_safe': False, # Assume safe if JSON parsing fails but no explicit block
-                    'rejection_reason': "Gemini response parsing error (manual review advised).",
-                    'sentiment': 'Unknown',
-                    'summary_caption': response.text[:50] + "..." if response.text else "" # Take first 50 chars as fallback
-                }
-
-        except genai.types.BlockedPromptException as e:
-            # This handles cases where the *prompt itself* is blocked, highly unlikely for confession text
-            return {
-                'is_safe': False,
-                'rejection_reason': f"Prompt blocked by safety settings: {e.response.prompt_feedback.safety_ratings}",
-                'sentiment': 'N/A',
-                'summary_caption': ''
-            }
-        except Exception as e:
-            print(f"Error calling Gemini API: {e}")
-            return {
-                'is_safe': False,
-                'rejection_reason': f"API error: {e}",
-                'sentiment': 'N/A',
-                'summary_caption': ''
-            }
+        config = GenerateContentConfig(
+            safety_settings=[
+                SafetySetting(
+                    category=HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    threshold=HarmBlockThreshold.BLOCK_LOW_AND_ABOVE
+                ),
+                SafetySetting(
+                    category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    threshold=HarmBlockThreshold.BLOCK_LOW_AND_ABOVE
+                ),
+                SafetySetting(
+                    category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    threshold=HarmBlockThreshold.BLOCK_LOW_AND_ABOVE
+                ),
+                SafetySetting(
+                    category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold=HarmBlockThreshold.BLOCK_LOW_AND_ABOVE
+                ),
+            ],
+            response_mime_type='application/json',
+            response_schema=ModerationResponse,
+        )
+        
+        response = self.client.models.generate_content(
+            model=os.getenv("MODERATION_MODEL"),
+            contents=prompt,
+            config=config
+        )
+        
+        result: ModerationResponse = response.parsed
+        
+        return {
+            'is_safe': result.is_safe,
+            'rejection_reason': result.rejection_reason,
+            'sentiment': result.sentiment,
+            'summary_caption': result.summary_caption
+        }
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
