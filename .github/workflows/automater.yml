@@ -43,6 +43,8 @@ jobs:
         CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
         CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
         MAX_CONFESSION_PER_RUN: ${{ secrets.MAX_CONFESSION_PER_RUN }}
+        MODERATION_MODEL: ${{ secrets.MODERATION_MODEL }}
+        SHORTLISTING_MODEL: ${{ secrets.SHORTLISTING_MODEL }}
       run: uv run python src/main.py
 
     - name: Cleanup generated_images and credentials
