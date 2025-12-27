@@ -176,9 +176,9 @@ class ConfessionImageGenerator:
         # Load NotoSansDevanagari font with larger sizes for reel
         try:
             font_path = "assets/NotoSansDevanagari-Regular.ttf"
-            font_reel_large = ImageFont.truetype(font_path, 70)
-            font_reel_medium = ImageFont.truetype(font_path, 45)
-            font_reel_small = ImageFont.truetype(font_path, 30)
+            font_reel_large = ImageFont.truetype(font_path, 50)
+            font_reel_medium = ImageFont.truetype(font_path, 32)
+            font_reel_small = ImageFont.truetype(font_path, 24)
         except Exception as e:
             print(f"Font loading error: {e}")
             font_reel_large = ImageFont.load_default()
