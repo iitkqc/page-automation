@@ -15,6 +15,7 @@ class ConfessionAutomation:
         self.credentials_json_base64 = os.getenv("GOOGLE_SHEETS_CREDENTIALS_FILE")
         self.instagram_page_id = os.getenv("INSTAGRAM_PAGE_ID")
         self.max_confession_per_run = int(os.getenv("MAX_CONFESSION_PER_RUN", 4))
+        self.total_confessions_to_choose_from = 5
         
         # Initialize components
         self.google_reader = None
@@ -85,12 +86,12 @@ class ConfessionAutomation:
         # Read confessions from the sheet
         new_confessions = self.google_reader.get_latest_confessions_from_sheet()
         print(f"Found {len(new_confessions)} new confessions from sheet.")
-        if len(new_confessions) < 10:
-            print("Not enough confessions to process. Minimum 10 required.")
+        if len(new_confessions) < self.total_confessions_to_choose_from:
+            print(f"Not enough confessions to process. Minimum {self.total_confessions_to_choose_from} required.")
             print("Exiting")
             return
         
-        new_confessions = new_confessions[-10:]  # Limit to last 10 confessions for rate limiting
+        new_confessions = new_confessions[-self.total_confessions_to_choose_from:]  # Limit to last confessions for rate limiting
         print(f"Processing {len(new_confessions)} confessions for moderation.")
 
         if not new_confessions:
