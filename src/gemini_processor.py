@@ -4,6 +4,7 @@ from typing import List
 from google import genai
 from google.genai.types import GenerateContentConfig, HarmBlockThreshold, HarmCategory, SafetySetting
 
+from content_taxonomy import IITK_CONTENT_CATEGORIES, get_category_display_name, normalize_category
 from model import Confession, ConfessionSelectionResponse, ModerationResponse
 
 
@@ -22,7 +23,7 @@ class GeminiProcessor:
         """
         confessions_text = "\n\n".join(
             [
-                f"Confession {index + 1}:\n{conf.text}\nSentiment: {conf.sentiment}"
+                f"Confession {index + 1}:\n{conf.text}\nSentiment: {conf.sentiment}\nCategory: {get_category_display_name(conf.category)}"
                 for index, conf in enumerate(confessions)
             ]
         )
@@ -34,6 +35,7 @@ class GeminiProcessor:
         - Prefer confessions with a strong story, vivid scene, or specific IITK flavor.
         - Reward emotional honesty, humor, awkwardness, niche campus observations, and memorable twists.
         - Avoid picking multiple confessions that feel repetitive.
+        - Keep the final set diverse in both tone and category when possible.
         - Avoid bland cliches, generic relationship bait, low-depth submissions, and content that sounds AI-written.
         - Avoid academic doubt posts or advice-seeking posts that belong in another forum.
         - Keep the final set diverse in tone: funny, heartfelt, chaotic, relatable, reflective.
@@ -95,9 +97,28 @@ class GeminiProcessor:
         Uses Gemini to moderate for hate speech and determine suitability.
         Returns a ModerationResponse dataclass with is_safe, rejection_reason, sentiment, and summary_caption.
         """
+        category_options = ", ".join(IITK_CONTENT_CATEGORIES)
         prompt = f"""
         Analyze the following confession text for hate speech, harassment, sexually explicit content, and dangerous content.
         Also determine the overall sentiment as one of: Positive, Negative, Neutral, Mixed.
+        Then classify the confession into exactly one IITK campus category from this list:
+        {category_options}
+
+        Category guidance:
+        - Pick the closest campus-native category, not a generic emotion label.
+        - Use hall_politics for hostel/hall drama, group tension, wing politics, or hostel power dynamics.
+        - Use mess_disaster for food, mess, canteen, menu, hygiene, or meal-related suffering.
+        - Use placement_meltdown for placements, job panic, rejection spirals, or career dread.
+        - Use exam_endsem_panic for exam pressure, endsems, midsems, grades, quizzes, or academic panic.
+        - Use prof_moment for professor incidents, faculty behavior, or memorable classroom moments.
+        - Use lab_assignment_suffering for lab work, assignments, submissions, reports, or academic grind.
+        - Use secret_crush for romance, crushes, pining, love, or almost-confessions.
+        - Use wing_nostalgia for hostel memories, batch nostalgia, late-night corridor feelings, or campus longing.
+        - Use fest_energy for Antaragni, Udghosh, events, clubs, stage energy, or fest chaos.
+        - Use cdc_intern_chaos for CDC, internships, resume stress, shortlists, or intern-season drama.
+        - Use convocation_feels for graduation, farewell, passing out, last-sem emotions, or convocation mood.
+        - Use campus_lore for legends, myths, iconic characters, or stories that feel like campus folklore.
+        - Use campus_life only if none of the above fit cleanly.
 
         If the confession is safe, write a creative Instagram-ready caption in a human voice.
 
@@ -106,6 +127,7 @@ class GeminiProcessor:
         - start with a strong hook, not a dry summary
         - sound like a real campus confession page, not a brand campaign
         - preserve the emotional vibe of the confession
+        - let the wording reflect the chosen IITK category
         - add 2 to 4 relevant hashtags at the end
         - avoid generic filler, emoji spam, and repetitive hashtags
 
@@ -116,6 +138,7 @@ class GeminiProcessor:
         - "is_safe": boolean
         - "rejection_reason": brief reason if not safe, otherwise empty string
         - "sentiment": Positive, Negative, Neutral, or Mixed
+        - "category": one exact value from the category list above
         - "summary_caption": the creative caption string
         """
 
@@ -149,6 +172,7 @@ class GeminiProcessor:
         )
 
         result: ModerationResponse = response.parsed
+        result.category = normalize_category(result.category)
         return result
 
 

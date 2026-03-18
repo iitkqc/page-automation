@@ -8,6 +8,7 @@ class Confession:
     text: str
     summary_caption: Optional[str] = None
     sentiment: Optional[str] = None
+    category: Optional[str] = None
     sigma_reply: Optional[str] = None
     count: Optional[int] = None
 
@@ -23,4 +24,5 @@ class ModerationResponse:
     is_safe: bool
     rejection_reason: str
     sentiment: str
+    category: str
     summary_caption: str

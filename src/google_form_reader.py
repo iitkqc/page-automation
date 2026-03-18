@@ -87,6 +87,7 @@ class GoogleFormReader:
                     text=row[1],  # Column B: confession text
                     summary_caption=None,  # Optional fields, set to None for now
                     sentiment=None,
+                    category=None,
                     sigma_reply=None
                 )
                 filtered_confessions.append(confession)

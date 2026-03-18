@@ -152,8 +152,12 @@ class ConfessionAutomation:
 
             
             if gemini_result.is_safe:
-                print(f"Confession deemed SAFE. Sentiment: {gemini_result.sentiment}")
+                print(
+                    f"Confession deemed SAFE. Sentiment: {gemini_result.sentiment}. "
+                    f"Category: {gemini_result.category}"
+                )
                 confession.sentiment = gemini_result.sentiment
+                confession.category = gemini_result.category
                 confession.summary_caption = gemini_result.summary_caption
                 shortlisted_confessions.append(confession)
             else:

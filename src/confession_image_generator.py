@@ -4,6 +4,13 @@ import re
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
+from content_taxonomy import (
+    get_category_display_name,
+    get_category_footer,
+    get_category_intro_fallback,
+    get_category_series_label,
+    normalize_category,
+)
 from model import Confession
 
 IMAGE_OUTPUT_DIR = "generated_images"
@@ -128,7 +135,8 @@ class ConfessionImageGenerator:
     def select_theme(self) -> dict:
         sentiment = (self.confession.sentiment or "neutral").lower()
         theme_pool = THEMES_BY_SENTIMENT.get(sentiment, THEMES_BY_SENTIMENT["neutral"])
-        seed = f"{self.confession.timestamp}-{self.confession.row_num}-{sentiment}"
+        category = normalize_category(self.confession.category)
+        seed = f"{self.confession.timestamp}-{self.confession.row_num}-{sentiment}-{category}"
         theme_index = int(hashlib.sha256(seed.encode("utf-8")).hexdigest(), 16) % len(theme_pool)
         return theme_pool[theme_index]
 
@@ -238,6 +246,12 @@ class ConfessionImageGenerator:
         sentiment = (self.confession.sentiment or "neutral").strip().upper()
         return sentiment if sentiment else "NEUTRAL"
 
+    def get_category_label(self) -> str:
+        return get_category_display_name(self.confession.category).upper()
+
+    def get_series_label(self) -> str:
+        return get_category_series_label(self.confession.category).upper()
+
     def clean_caption_text(self) -> str:
         caption = self.confession.summary_caption or ""
         without_hashtags = re.sub(r"#\w+", "", caption)
@@ -255,7 +269,7 @@ class ConfessionImageGenerator:
         if len(intro_text) > 96:
             intro_text = intro_text[:96].rsplit(" ", 1)[0].strip() + "..."
 
-        return intro_text or "A campus confession worth reading."
+        return intro_text or get_category_intro_fallback(self.confession.category)
 
     def truncate_text(self, text: str, limit: int) -> str:
         if len(text) <= limit:
@@ -414,8 +428,9 @@ class ConfessionImageGenerator:
         draw.text((self.img_width // 2, 92), "IITK QUICK CONFESSIONS", font=brand_font, fill=self.theme["text"], anchor="mm")
         self.draw_badge(draw, 72, 126, self.get_confession_label(), badge_font)
 
-        sentiment_width, _ = self.measure_text(draw, self.get_sentiment_label(), badge_font)
-        self.draw_badge(draw, self.img_width - sentiment_width - 172, 126, self.get_sentiment_label(), badge_font)
+        category_label = self.get_category_label()
+        category_width, _ = self.measure_text(draw, category_label, badge_font)
+        self.draw_badge(draw, self.img_width - category_width - 172, 126, category_label, badge_font)
 
         panel_bounds = (88, 260, self.img_width - 88, self.img_height - 178)
         draw.rounded_rectangle(panel_bounds, radius=42, fill=self.theme["panel"], outline=self.theme["outline"], width=3)
@@ -491,7 +506,7 @@ class ConfessionImageGenerator:
             y = start_y + (index * line_height)
             draw.text((x, y), line, font=body_font, fill=self.theme["text"])
 
-        draw.text((110, self.img_height - 92), self.theme["name"].upper(), font=helper_font, fill=self.theme["accent"])
+        draw.text((110, self.img_height - 92), self.get_series_label(), font=helper_font, fill=self.theme["accent"])
         self.draw_slide_indicator(draw, slide_num, total_slides, badge_font, self.img_width, self.img_height)
 
         filename = f"confession_{self.confession.row_num}_slide_{slide_num}.png"
@@ -541,7 +556,7 @@ class ConfessionImageGenerator:
 
         draw.text(
             (reel_width // 2, reel_height - 118),
-            "One slide. One campus mood.",
+            get_category_footer(self.confession.category),
             font=helper_font,
             fill=self.theme["accent"],
             anchor="mm",
