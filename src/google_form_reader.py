@@ -88,7 +88,8 @@ class GoogleFormReader:
                     summary_caption=None,  # Optional fields, set to None for now
                     sentiment=None,
                     category=None,
-                    sigma_reply=None
+                    sigma_reply=None,
+                    pinned_comments=None,
                 )
                 filtered_confessions.append(confession)
 

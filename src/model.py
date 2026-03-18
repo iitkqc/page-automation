@@ -10,6 +10,7 @@ class Confession:
     sentiment: Optional[str] = None
     category: Optional[str] = None
     sigma_reply: Optional[str] = None
+    pinned_comments: Optional[dict[str, str]] = None
     count: Optional[int] = None
 
 @dataclass
@@ -17,6 +18,9 @@ class ConfessionSelectionResponse:
     """Response schema for confession selection."""
     indices: List[int]
     admin_replies: List[str]
+    funny_pinned_comments: List[str]
+    empathetic_pinned_comments: List[str]
+    discussion_pinned_comments: List[str]
 
 @dataclass
 class ModerationResponse:

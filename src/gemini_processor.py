@@ -60,9 +60,46 @@ class GeminiProcessor:
         - no cringe motivational lines
         - leave the reply empty if nothing clever comes naturally
 
+        Also generate 3 pinned comment options for each selected confession:
+        1. funny_pinned_comment
+        2. empathetic_pinned_comment
+        3. discussion_pinned_comment
+
+        These pinned comments must feel more engaging than generic filler.
+
+        Funny pinned comment rules:
+        - 5 to 16 words
+        - sharp, quotable, scroll-stopping
+        - should sound like an admin with timing, not a random meme account
+        - can be dry, chaotic, or deadpan, but not forced
+        - avoid bland lines like "this is crazy", "lore getting stronger", or "admin can't believe this"
+
+        Empathetic pinned comment rules:
+        - 6 to 18 words
+        - warm, human, and emotionally aware
+        - should validate the vibe without sounding preachy, robotic, or therapy-speak
+        - should still feel campus-native
+
+        Discussion pinned comment rules:
+        - 6 to 18 words
+        - should make people want to reply
+        - ask something specific, debatable, or instantly relatable
+        - avoid weak bait like "thoughts?" or "agree?"
+        - whenever possible, anchor it in IITK life, halls, CDC, profs, wings, fests, or campus habits
+
+        General pinned comment rules:
+        - no hashtags
+        - no emojis unless genuinely necessary
+        - no generic engagement bait
+        - no repeated wording across the 3 comment options
+        - each one should feel like a distinct comment worth actually pinning
+
         Return your response as JSON with:
         - "indices": 1-based selected confession indices
         - "admin_replies": same length as indices, with empty strings when no reply is needed
+        - "funny_pinned_comments": same length as indices
+        - "empathetic_pinned_comments": same length as indices
+        - "discussion_pinned_comments": same length as indices
         """
 
         config = GenerateContentConfig(
@@ -88,6 +125,11 @@ class GeminiProcessor:
             seen_indices.add(index)
             confession = confessions[index - 1]
             confession.sigma_reply = result.admin_replies[position] if position < len(result.admin_replies) else ""
+            confession.pinned_comments = {
+                "funny": result.funny_pinned_comments[position] if position < len(result.funny_pinned_comments) else "",
+                "empathetic": result.empathetic_pinned_comments[position] if position < len(result.empathetic_pinned_comments) else "",
+                "discussion_bait": result.discussion_pinned_comments[position] if position < len(result.discussion_pinned_comments) else "",
+            }
             selected_confessions.append(confession)
 
         return selected_confessions
