@@ -509,17 +509,11 @@ class ConfessionImageGenerator:
 
         brand_font = self.load_font(34)
         badge_font = self.load_font(26)
-        hook_font = self.load_font(30)
         helper_font = self.load_font(28)
         quote_font = self.load_font(170)
 
         draw.text((reel_width // 2, 128), "IITK QUICK CONFESSIONS", font=brand_font, fill=self.theme["text"], anchor="mm")
         self.draw_badge(draw, 88, 182, self.get_confession_label(), badge_font)
-
-        hook_text = self.truncate_text(self.build_intro_text(), 42)
-        hook_width, _ = self.measure_text(draw, hook_text, hook_font)
-        hook_x = max(88, reel_width - hook_width - 180)
-        self.draw_badge(draw, hook_x, 182, hook_text, hook_font)
 
         panel_bounds = (96, 410, reel_width - 96, reel_height - 240)
         draw.rounded_rectangle(panel_bounds, radius=48, fill=self.theme["panel"], outline=self.theme["outline"], width=3)
