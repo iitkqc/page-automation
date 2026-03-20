@@ -123,6 +123,12 @@ THEMES_BY_SENTIMENT = {
     ],
 }
 
+MONOCHROME_COLORS = {
+    "bg": (0, 0, 0),
+    "text": (255, 255, 255),
+    "accent": (220, 220, 220),
+}
+
 
 class ConfessionImageGenerator:
     def __init__(self, confession: Confession):
@@ -186,6 +192,9 @@ class ConfessionImageGenerator:
 
         return composed
 
+    def create_monochrome_background(self, width: int, height: int) -> Image.Image:
+        return Image.new("RGB", (width, height), color=MONOCHROME_COLORS["bg"])
+
     def measure_text(self, draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int]:
         bbox = draw.textbbox((0, 0), text, font=font)
         return bbox[2] - bbox[0], bbox[3] - bbox[1]
@@ -241,6 +250,11 @@ class ConfessionImageGenerator:
         if self.confession.count:
             return f"CONFESSION #{self.confession.count}"
         return "IITK CONFESSION"
+
+    def get_confession_number_label(self) -> str:
+        if self.confession.count:
+            return f"#{self.confession.count}"
+        return ""
 
     def get_sentiment_label(self) -> str:
         sentiment = (self.confession.sentiment or "neutral").strip().upper()
@@ -420,18 +434,78 @@ class ConfessionImageGenerator:
     def draw_slide_indicator(self, draw: ImageDraw.ImageDraw, slide_num: int, total_slides: int, font, width: int, height: int):
         indicator = f"{slide_num}/{total_slides}"
         indicator_width, indicator_height = self.measure_text(draw, indicator, font)
-        padding_x = 18
-        padding_y = 12
-        x = width - indicator_width - (padding_x * 2) - 54
-        y = height - indicator_height - (padding_y * 2) - 46
+        padding_x = 12
+        padding_y = 8
+        x = width - indicator_width - (padding_x * 2) - 30
+        y = height - indicator_height - (padding_y * 2) - 28
         bounds = (
             x,
             y,
             x + indicator_width + (padding_x * 2),
             y + indicator_height + (padding_y * 2),
         )
-        draw.rounded_rectangle(bounds, radius=22, fill=self.theme["panel"], outline=self.theme["outline"], width=2)
-        draw.text((x + padding_x, y + padding_y - 1), indicator, font=font, fill=self.theme["text"])
+        draw.rectangle(bounds, fill=MONOCHROME_COLORS["text"], outline=MONOCHROME_COLORS["text"])
+        draw.text((x + padding_x, y + padding_y - 2), indicator, font=font, fill=MONOCHROME_COLORS["bg"])
+
+    def draw_monochrome_header(
+        self,
+        draw: ImageDraw.ImageDraw,
+        width: int,
+        title_y: int,
+        count_y: int,
+        title_size: int,
+        count_size: int,
+    ) -> None:
+        title_font = self.load_font(title_size)
+        count_font = self.load_font(count_size)
+
+        draw.text(
+            (width // 2, title_y),
+            "IITK QUICK CONFESSIONS",
+            font=title_font,
+            fill=MONOCHROME_COLORS["accent"],
+            anchor="mm",
+        )
+
+        count_label = self.get_confession_number_label()
+        if count_label:
+            draw.text(
+                (width // 2, count_y),
+                count_label,
+                font=count_font,
+                fill=MONOCHROME_COLORS["accent"],
+                anchor="mm",
+            )
+
+    def draw_centered_text_block(
+        self,
+        draw: ImageDraw.ImageDraw,
+        text: str,
+        bounds: tuple[int, int, int, int],
+        start_size: int,
+        min_size: int,
+        line_height_factor: float,
+        fill: tuple[int, int, int],
+    ) -> None:
+        max_text_width = bounds[2] - bounds[0]
+        max_text_height = bounds[3] - bounds[1]
+        body_font, lines, line_height = self.fit_font_to_panel(
+            draw,
+            text,
+            start_size,
+            min_size,
+            max_text_width,
+            max_text_height,
+            line_height_factor,
+        )
+        total_height = len(lines) * line_height
+        start_y = bounds[1] + ((bounds[3] - bounds[1] - total_height) // 2)
+
+        for index, line in enumerate(lines):
+            line_width, _ = self.measure_text(draw, line, body_font)
+            x = (bounds[0] + bounds[2] - line_width) // 2
+            y = start_y + (index * line_height)
+            draw.text((x, y), line, font=body_font, fill=fill)
 
     def split_text_into_slides(self) -> list[str]:
         if len(self.confession.text) <= self.max_chars_per_slide:
@@ -497,98 +571,69 @@ class ConfessionImageGenerator:
         return slides
 
     def create_intro_slide(self, total_slides: int) -> str:
-        img = self.create_gradient_background(self.img_width, self.img_height)
+        img = self.create_monochrome_background(self.img_width, self.img_height)
         draw = ImageDraw.Draw(img)
 
-        brand_font = self.load_font(28)
-        badge_font = self.load_font(24)
         helper_font = self.load_font(26)
-        quote_font = self.load_font(150)
         intro_text = self.build_intro_text()
 
-        draw.text((self.img_width // 2, 92), "IITK QUICK CONFESSIONS", font=brand_font, fill=self.theme["text"], anchor="mm")
-        self.draw_badge(draw, 72, 126, self.get_confession_label(), badge_font)
-
-        category_label = self.get_category_label()
-        category_width, _ = self.measure_text(draw, category_label, badge_font)
-        self.draw_badge(draw, self.img_width - category_width - 172, 126, category_label, badge_font)
-
-        panel_bounds = (88, 260, self.img_width - 88, self.img_height - 178)
-        self.draw_patterned_panel(img, panel_bounds, radius=42, outline_width=3)
-        draw.text((148, 282), '"', font=quote_font, fill=self.theme["accent"])
-
-        max_text_width = panel_bounds[2] - panel_bounds[0] - 150
-        max_text_height = panel_bounds[3] - panel_bounds[1] - 120
-        intro_font, intro_lines, line_height = self.fit_font_to_panel(
+        self.draw_monochrome_header(
+            draw,
+            self.img_width,
+            title_y=52,
+            count_y=104,
+            title_size=30,
+            count_size=28,
+        )
+        self.draw_centered_text_block(
             draw,
             intro_text,
-            64 if len(intro_text) < 54 else 56,
-            40,
-            max_text_width,
-            max_text_height,
-            1.22,
+            bounds=(120, 190, self.img_width - 120, self.img_height - 160),
+            start_size=64 if len(intro_text) < 54 else 56,
+            min_size=40,
+            line_height_factor=1.18,
+            fill=MONOCHROME_COLORS["text"],
         )
-        total_height = len(intro_lines) * line_height
-        start_y = panel_bounds[1] + ((panel_bounds[3] - panel_bounds[1] - total_height) // 2) + 18
-
-        for index, line in enumerate(intro_lines):
-            line_width, _ = self.measure_text(draw, line, intro_font)
-            x = (self.img_width - line_width) // 2
-            y = start_y + (index * line_height)
-            draw.text((x, y), line, font=intro_font, fill=self.theme["text"])
 
         draw.text(
             (self.img_width // 2, self.img_height - 110),
             "Swipe for the full confession",
             font=helper_font,
-            fill=self.theme["accent"],
+            fill=MONOCHROME_COLORS["accent"],
             anchor="mm",
         )
 
-        self.draw_slide_indicator(draw, 1, total_slides, badge_font, self.img_width, self.img_height)
+        self.draw_slide_indicator(draw, 1, total_slides, helper_font, self.img_width, self.img_height)
 
         image_path = os.path.join(IMAGE_OUTPUT_DIR, f"confession_{self.confession.row_num}_slide_1.png")
         img.save(image_path, optimize=True)
         return image_path
 
     def create_slide_image(self, text: str, slide_num: int, total_slides: int) -> str:
-        img = self.create_gradient_background(self.img_width, self.img_height)
+        img = self.create_monochrome_background(self.img_width, self.img_height)
         draw = ImageDraw.Draw(img)
 
-        brand_font = self.load_font(28)
-        badge_font = self.load_font(24)
-        helper_font = self.load_font(22)
-        quote_font = self.load_font(110)
-
-        draw.text((self.img_width // 2, 88), "IITK QUICK CONFESSIONS", font=brand_font, fill=self.theme["text"], anchor="mm")
-        self.draw_badge(draw, 72, 122, self.get_confession_label(), badge_font)
-
-        panel_bounds = (88, 205, self.img_width - 88, self.img_height - 152)
-        self.draw_patterned_panel(img, panel_bounds, radius=40, outline_width=3)
-        draw.text((136, 230), '"', font=quote_font, fill=self.theme["accent"])
-
-        max_text_width = panel_bounds[2] - panel_bounds[0] - 144
-        max_text_height = panel_bounds[3] - panel_bounds[1] - 120
-        body_font, text_lines, line_height = self.fit_font_to_panel(
+        indicator_font = self.load_font(24)
+        self.draw_monochrome_header(
+            draw,
+            self.img_width,
+            title_y=52,
+            count_y=104,
+            title_size=30,
+            count_size=28,
+        )
+        self.draw_centered_text_block(
             draw,
             text,
-            self.get_body_font_size(text),
-            34,
-            max_text_width,
-            max_text_height,
-            1.24,
+            bounds=(120, 180, self.img_width - 120, self.img_height - 110),
+            start_size=min(self.get_body_font_size(text) + 12, 72),
+            min_size=34,
+            line_height_factor=1.18,
+            fill=MONOCHROME_COLORS["text"],
         )
-        total_height = len(text_lines) * line_height
-        start_y = panel_bounds[1] + ((panel_bounds[3] - panel_bounds[1] - total_height) // 2) + 12
 
-        for index, line in enumerate(text_lines):
-            line_width, _ = self.measure_text(draw, line, body_font)
-            x = (self.img_width - line_width) // 2
-            y = start_y + (index * line_height)
-            draw.text((x, y), line, font=body_font, fill=self.theme["text"])
-
-        draw.text((110, self.img_height - 92), self.get_series_label(), font=helper_font, fill=self.theme["accent"])
-        self.draw_slide_indicator(draw, slide_num, total_slides, badge_font, self.img_width, self.img_height)
+        if total_slides > 1:
+            self.draw_slide_indicator(draw, slide_num, total_slides, indicator_font, self.img_width, self.img_height)
 
         filename = f"confession_{self.confession.row_num}_slide_{slide_num}.png"
         image_path = os.path.join(IMAGE_OUTPUT_DIR, filename)
@@ -600,47 +645,25 @@ class ConfessionImageGenerator:
 
         reel_width = 1080
         reel_height = 1920
-        img = self.create_gradient_background(reel_width, reel_height)
+        img = self.create_monochrome_background(reel_width, reel_height)
         draw = ImageDraw.Draw(img)
 
-        brand_font = self.load_font(34)
-        badge_font = self.load_font(26)
-        helper_font = self.load_font(28)
-        quote_font = self.load_font(170)
-
-        draw.text((reel_width // 2, 128), "IITK QUICK CONFESSIONS", font=brand_font, fill=self.theme["text"], anchor="mm")
-        self.draw_badge(draw, 88, 182, self.get_confession_label(), badge_font)
-
-        panel_bounds = (96, 410, reel_width - 96, reel_height - 240)
-        self.draw_patterned_panel(img, panel_bounds, radius=48, outline_width=3)
-        draw.text((150, 454), '"', font=quote_font, fill=self.theme["accent"])
-
-        max_text_width = panel_bounds[2] - panel_bounds[0] - 152
-        max_text_height = panel_bounds[3] - panel_bounds[1] - 170
-        body_font, lines, line_height = self.fit_font_to_panel(
+        self.draw_monochrome_header(
+            draw,
+            reel_width,
+            title_y=132,
+            count_y=188,
+            title_size=34,
+            count_size=32,
+        )
+        self.draw_centered_text_block(
             draw,
             text,
-            self.get_body_font_size(text, is_reel=True),
-            34,
-            max_text_width,
-            max_text_height,
-            1.28,
-        )
-        total_text_height = len(lines) * line_height
-        start_y = panel_bounds[1] + ((panel_bounds[3] - panel_bounds[1] - total_text_height) // 2) + 20
-
-        for index, line in enumerate(lines):
-            line_width, _ = self.measure_text(draw, line, body_font)
-            x = (reel_width - line_width) // 2
-            y = start_y + (index * line_height)
-            draw.text((x, y), line, font=body_font, fill=self.theme["text"])
-
-        draw.text(
-            (reel_width // 2, reel_height - 118),
-            get_category_footer(self.confession.category),
-            font=helper_font,
-            fill=self.theme["accent"],
-            anchor="mm",
+            bounds=(110, 330, reel_width - 110, reel_height - 200),
+            start_size=min(self.get_body_font_size(text, is_reel=True) + 10, 78),
+            min_size=36,
+            line_height_factor=1.2,
+            fill=MONOCHROME_COLORS["text"],
         )
 
         image_path = os.path.join(IMAGE_OUTPUT_DIR, f"confession_{self.confession.row_num}_reel.png")
@@ -650,51 +673,34 @@ class ConfessionImageGenerator:
     def create_story_image(self, text: str | None = None) -> str:
         story_width = 1080
         story_height = 1920
-        img = self.create_gradient_background(story_width, story_height)
+        img = self.create_monochrome_background(story_width, story_height)
         draw = ImageDraw.Draw(img)
 
         story_text = self.truncate_text((text or self.build_story_share_text()).strip(), 240)
-        brand_font = self.load_font(34)
-        badge_font = self.load_font(26)
         helper_font = self.load_font(30)
-        quote_font = self.load_font(170)
-
-        draw.text((story_width // 2, 128), "IITK QUICK CONFESSIONS", font=brand_font, fill=self.theme["text"], anchor="mm")
-        self.draw_badge(draw, 88, 182, self.get_confession_label(), badge_font)
-
-        category_label = self.get_category_label()
-        category_width, _ = self.measure_text(draw, category_label, badge_font)
-        self.draw_badge(draw, story_width - category_width - 180, 182, category_label, badge_font)
-
-        panel_bounds = (84, 382, story_width - 84, story_height - 292)
-        self.draw_patterned_panel(img, panel_bounds, radius=50, outline_width=3)
-        draw.text((146, 426), '"', font=quote_font, fill=self.theme["accent"])
-
-        max_text_width = panel_bounds[2] - panel_bounds[0] - 152
-        max_text_height = panel_bounds[3] - panel_bounds[1] - 220
-        body_font, lines, line_height = self.fit_font_to_panel(
+        self.draw_monochrome_header(
+            draw,
+            story_width,
+            title_y=132,
+            count_y=188,
+            title_size=34,
+            count_size=32,
+        )
+        self.draw_centered_text_block(
             draw,
             story_text,
-            60,
-            36,
-            max_text_width,
-            max_text_height,
-            1.24,
+            bounds=(110, 330, story_width - 110, story_height - 270),
+            start_size=64,
+            min_size=36,
+            line_height_factor=1.2,
+            fill=MONOCHROME_COLORS["text"],
         )
-        total_text_height = len(lines) * line_height
-        start_y = panel_bounds[1] + ((panel_bounds[3] - panel_bounds[1] - total_text_height) // 2) + 14
-
-        for index, line in enumerate(lines):
-            line_width, _ = self.measure_text(draw, line, body_font)
-            x = (story_width - line_width) // 2
-            y = start_y + (index * line_height)
-            draw.text((x, y), line, font=body_font, fill=self.theme["text"])
 
         draw.text(
             (story_width // 2, story_height - 136),
             "Full confession on feed",
             font=helper_font,
-            fill=self.theme["accent"],
+            fill=MONOCHROME_COLORS["accent"],
             anchor="mm",
         )
 

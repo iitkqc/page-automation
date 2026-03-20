@@ -170,31 +170,31 @@ class ConfessionAutomation:
 
     def schedule_posts(self, shortlisted_posts: List[Confession]) -> set:
         """
-        Schedule posts using Instagram Graph API.
+        Publish posts using Instagram Graph API.
         Returns a set of row numbers that were attempted (successfully or not).
         """
         attempted_rows = set()
         
         for i, post_data in enumerate(shortlisted_posts):
-            print(f"Attempting to schedule post {i+1}/{len(shortlisted_posts)}...")
+            print(f"Attempting to publish post {i+1}/{len(shortlisted_posts)}...")
             count = self.google_reader.get_count()
             post_data.count = count + 1
             
             try:
-                # Use the Instagram poster to schedule the post
+                # Use the Instagram poster to publish the post
                 if self.instagram_poster.schedule_instagram_post(post_data):
-                    print(f"Successfully scheduled confession ID: {post_data.timestamp} to Instagram!")
+                    print(f"Successfully published confession ID: {post_data.timestamp} to Instagram!")
                     # Mark as processed in sheet with status 1 (success)
                     self.google_reader.increment_count()
                     self.google_reader.mark_confession_as_processed(post_data.row_num, 1)
                     attempted_rows.add(post_data.row_num)
                 else:
-                    print(f"Failed to schedule post for confession ID: {post_data.timestamp}")
+                    print(f"Failed to publish confession ID: {post_data.timestamp}")
                     # Mark as processed in sheet with status 0 (failed)
                     self.google_reader.mark_confession_as_processed(post_data.row_num, 0)
                     attempted_rows.add(post_data.row_num)
             except Exception as e:
-                print(f"Error scheduling post for confession ID: {post_data.timestamp}: {e}")
+                print(f"Error publishing confession ID: {post_data.timestamp}: {e}")
                 # Mark as attempted but failed
                 attempted_rows.add(post_data.row_num)
                 self.google_reader.mark_confession_as_processed(post_data.row_num, 0)

@@ -32,6 +32,28 @@ class InstagramPoster:
         # if not self.access_token:
         #     print("Warning: INSTAGRAM_ACCESS_TOKEN not set.")
 
+    def should_retry_publish(self, response: requests.Response | None) -> bool:
+        """Return True when Instagram says the media is still processing."""
+        if response is None:
+            return False
+
+        try:
+            payload = response.json()
+        except ValueError:
+            return False
+
+        error = payload.get("error", {})
+        message = " ".join(
+            str(part or "")
+            for part in (
+                error.get("message"),
+                error.get("error_user_title"),
+                error.get("error_user_msg"),
+            )
+        ).lower()
+
+        return error.get("code") == 9007 or "not ready for publishing" in message or "media id is not available" in message
+
     def upload_image_to_cloudinary(self, image_path: str, public_id: str) -> str:
         """Upload a single image to Cloudinary and return its URL."""
         try:
@@ -200,7 +222,7 @@ class InstagramPoster:
                 print(f"Response: {e.response.text}")
             return ""
 
-    def publish_instagram_post(self, media_container_id: str) -> str:
+    def publish_instagram_post(self, media_container_id: str, retry_delays: List[int] | None = None) -> str:
         """Publish the media container to Instagram and return the media ID."""
         if not self.instagram_page_id or not self.access_token:
             return ""
@@ -210,18 +232,31 @@ class InstagramPoster:
             'creation_id': media_container_id,
             'access_token': self.access_token
         }
+        retry_schedule = retry_delays or []
 
-        try:
-            response = requests.post(url, params=params)
-            response.raise_for_status()
-            post_id = response.json().get('id')
-            print(f"Successfully published post with ID: {post_id}")
-            return post_id or ""
-        except requests.exceptions.RequestException as e:
-            print(f"Error publishing post: {e}")
-            if hasattr(e, 'response') and e.response is not None:
-                print(f"Response: {e.response.text}")
-            return ""
+        for attempt in range(len(retry_schedule) + 1):
+            try:
+                response = requests.post(url, params=params)
+                response.raise_for_status()
+                post_id = response.json().get('id')
+                print(f"Successfully published post with ID: {post_id}")
+                return post_id or ""
+            except requests.exceptions.RequestException as e:
+                response = getattr(e, "response", None)
+                print(f"Error publishing post: {e}")
+                if response is not None:
+                    print(f"Response: {response.text}")
+
+                if attempt < len(retry_schedule) and self.should_retry_publish(response):
+                    wait_seconds = retry_schedule[attempt]
+                    print(
+                        f"Media is still processing. Retrying publish in {wait_seconds} seconds "
+                        f"(attempt {attempt + 2}/{len(retry_schedule) + 1})..."
+                    )
+                    time.sleep(wait_seconds)
+                    continue
+
+                return ""
 
     def pick_generated_comment(self, confession: Confession) -> str:
         """Pick one generated engagement comment to post."""
@@ -309,7 +344,7 @@ class InstagramPoster:
 
             print("Waiting for Instagram to process story media...")
             time.sleep(10)
-            story_id = self.publish_instagram_post(media_container_id)
+            story_id = self.publish_instagram_post(media_container_id, retry_delays=[5, 10, 15])
             if story_id:
                 print(f"Successfully shared confession {confession.timestamp} to Instagram Story!")
         except Exception as e:
@@ -383,7 +418,7 @@ class InstagramPoster:
                     print("Waiting for Instagram to process reel...")
                     time.sleep(30)  # Reels may need more time to process
 
-                    post_id = self.publish_instagram_post(media_container_id)
+                    post_id = self.publish_instagram_post(media_container_id, retry_delays=[15, 20, 30, 45])
                     if post_id:
                         self.post_generated_comments(post_id, confession)
                         self.share_confession_to_story(confession, generator, slides[0])
@@ -427,7 +462,7 @@ class InstagramPoster:
                     print("Waiting for Instagram to process media...")
                     time.sleep(20)  # Give Instagram time to process
 
-                    post_id = self.publish_instagram_post(media_container_id)
+                    post_id = self.publish_instagram_post(media_container_id, retry_delays=[10, 15, 20])
                     if post_id:
                         self.post_generated_comments(post_id, confession)
                         self.share_confession_to_story(confession, generator, slides[0])
