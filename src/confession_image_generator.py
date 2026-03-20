@@ -323,6 +323,78 @@ class ConfessionImageGenerator:
         line_height = int(size_value * line_height_factor)
         return font, lines, line_height
 
+    def draw_patterned_panel(
+        self,
+        image: Image.Image,
+        bounds: tuple[int, int, int, int],
+        radius: int,
+        outline_width: int = 3,
+    ) -> None:
+        left, top, right, bottom = bounds
+        panel_width = max(right - left, 1)
+        panel_height = max(bottom - top, 1)
+        panel_rgb = self.theme["panel"][:3]
+        accent_rgb = self.theme["accent"][:3]
+        text_rgb = self.theme["text"][:3]
+
+        mask = Image.new("L", (panel_width, panel_height), 0)
+        mask_draw = ImageDraw.Draw(mask)
+        mask_draw.rounded_rectangle((0, 0, panel_width - 1, panel_height - 1), radius=radius, fill=255)
+
+        panel = Image.new("RGBA", (panel_width, panel_height), self.theme["panel"])
+        panel_draw = ImageDraw.Draw(panel)
+
+        tile_size = max(56, min(panel_width, panel_height) // 6)
+        light_tile = self.interpolate_color(panel_rgb, accent_rgb, 0.24)
+        dark_tile = self.interpolate_color(panel_rgb, text_rgb, 0.1)
+        tile_alpha = min(52, max(24, self.theme["panel"][3] // 3))
+
+        for row, y in enumerate(range(-tile_size, panel_height + tile_size, tile_size)):
+            for col, x in enumerate(range(-tile_size, panel_width + tile_size, tile_size)):
+                is_light_tile = (row + col) % 2 == 0
+                fill_color = light_tile if is_light_tile else dark_tile
+                fill_alpha = tile_alpha if is_light_tile else max(14, tile_alpha - 10)
+                panel_draw.rectangle((x, y, x + tile_size, y + tile_size), fill=fill_color + (fill_alpha,))
+
+        grid_alpha = min(42, max(18, tile_alpha - 6))
+        grid_color = self.interpolate_color(panel_rgb, text_rgb, 0.3) + (grid_alpha,)
+        for x in range(tile_size, panel_width, tile_size):
+            panel_draw.line([(x, 0), (x, panel_height)], fill=grid_color, width=1)
+        for y in range(tile_size, panel_height, tile_size):
+            panel_draw.line([(0, y), (panel_width, y)], fill=grid_color, width=1)
+
+        sheen = Image.new("RGBA", (panel_width, panel_height), (0, 0, 0, 0))
+        sheen_draw = ImageDraw.Draw(sheen)
+        sheen_draw.ellipse(
+            (-panel_width // 4, -panel_height // 3, panel_width // 2, panel_height // 3),
+            fill=accent_rgb + (50,),
+        )
+        sheen_draw.ellipse(
+            (panel_width // 3, panel_height // 2, panel_width + panel_width // 6, panel_height + panel_height // 4),
+            fill=text_rgb + (18,),
+        )
+        sheen = sheen.filter(ImageFilter.GaussianBlur(max(18, tile_size // 2)))
+        panel = Image.alpha_composite(panel, sheen)
+
+        diagonal_overlay = Image.new("RGBA", (panel_width, panel_height), (0, 0, 0, 0))
+        diagonal_draw = ImageDraw.Draw(diagonal_overlay)
+        diagonal_color = accent_rgb + (22,)
+        for offset in range(-panel_height, panel_width, tile_size):
+            diagonal_draw.line(
+                [(offset, panel_height), (offset + panel_height, 0)],
+                fill=diagonal_color,
+                width=2,
+            )
+        diagonal_overlay = diagonal_overlay.filter(ImageFilter.GaussianBlur(1))
+        panel = Image.alpha_composite(panel, diagonal_overlay)
+
+        clipped_panel = Image.new("RGBA", (panel_width, panel_height), (0, 0, 0, 0))
+        clipped_panel.paste(panel, (0, 0), mask)
+        image.paste(clipped_panel, (left, top), clipped_panel)
+
+        draw = ImageDraw.Draw(image)
+        draw.rounded_rectangle(bounds, radius=radius, outline=self.theme["outline"], width=outline_width)
+
     def draw_badge(self, draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font):
         text_width, text_height = self.measure_text(draw, text, font)
         padding_x = 28
@@ -433,7 +505,7 @@ class ConfessionImageGenerator:
         self.draw_badge(draw, self.img_width - category_width - 172, 126, category_label, badge_font)
 
         panel_bounds = (88, 260, self.img_width - 88, self.img_height - 178)
-        draw.rounded_rectangle(panel_bounds, radius=42, fill=self.theme["panel"], outline=self.theme["outline"], width=3)
+        self.draw_patterned_panel(img, panel_bounds, radius=42, outline_width=3)
         draw.text((148, 282), '"', font=quote_font, fill=self.theme["accent"])
 
         max_text_width = panel_bounds[2] - panel_bounds[0] - 150
@@ -483,7 +555,7 @@ class ConfessionImageGenerator:
         self.draw_badge(draw, 72, 122, self.get_confession_label(), badge_font)
 
         panel_bounds = (88, 205, self.img_width - 88, self.img_height - 152)
-        draw.rounded_rectangle(panel_bounds, radius=40, fill=self.theme["panel"], outline=self.theme["outline"], width=3)
+        self.draw_patterned_panel(img, panel_bounds, radius=40, outline_width=3)
         draw.text((136, 230), '"', font=quote_font, fill=self.theme["accent"])
 
         max_text_width = panel_bounds[2] - panel_bounds[0] - 144
@@ -531,7 +603,7 @@ class ConfessionImageGenerator:
         self.draw_badge(draw, 88, 182, self.get_confession_label(), badge_font)
 
         panel_bounds = (96, 410, reel_width - 96, reel_height - 240)
-        draw.rounded_rectangle(panel_bounds, radius=48, fill=self.theme["panel"], outline=self.theme["outline"], width=3)
+        self.draw_patterned_panel(img, panel_bounds, radius=48, outline_width=3)
         draw.text((150, 454), '"', font=quote_font, fill=self.theme["accent"])
 
         max_text_width = panel_bounds[2] - panel_bounds[0] - 152
@@ -569,26 +641,20 @@ class ConfessionImageGenerator:
     def generate_confession_images(self) -> list[str]:
         body_slides = self.split_text_into_slides()
 
-        image_paths = []
-        if len(body_slides) > 1:
-            max_body_slides = 9
-            if len(body_slides) > max_body_slides:
-                print(
-                    f"Warning: Confession {self.confession.row_num} has {len(body_slides)} slides. "
-                    f"Truncating body slides to {max_body_slides} so the intro card still fits."
-                )
-                body_slides = body_slides[:max_body_slides]
+        max_body_slides = 10
+        if len(body_slides) > max_body_slides:
+            print(
+                f"Warning: Confession {self.confession.row_num} has {len(body_slides)} slides. "
+                f"Truncating body slides to {max_body_slides} to fit Instagram's carousel limit."
+            )
+            body_slides = body_slides[:max_body_slides]
 
-            total_slides = len(body_slides) + 1
-            image_paths.append(self.create_intro_slide(total_slides))
-            start_index = 2
-        else:
-            total_slides = len(body_slides)
-            start_index = 1
+        image_paths = []
+        total_slides = len(body_slides)
 
         print(f"Generating {total_slides} slide(s) for confession {self.confession.row_num}")
 
-        for offset, slide_text in enumerate(body_slides, start=start_index):
+        for offset, slide_text in enumerate(body_slides, start=1):
             image_paths.append(self.create_slide_image(slide_text, offset, total_slides))
 
         return image_paths
