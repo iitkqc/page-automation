@@ -163,6 +163,7 @@ class GeminiProcessor:
         - Use campus_life only if none of the above fit cleanly.
 
         If the confession is safe, write a creative Instagram-ready caption in a human voice.
+        Also decide whether the confession is worth resharing to Stories as a campus-wide social-message post.
 
         Caption rules:
         - maximum 45 words total
@@ -173,6 +174,11 @@ class GeminiProcessor:
         - add 2 to 4 relevant hashtags at the end
         - avoid generic filler, emoji spam, and repetitive hashtags
 
+        Story-share rules:
+        - set "story_share_candidate" to true only when the confession carries a clear social message, cautionary takeaway, mental-health resonance, harassment/safety signal, or a campus-wide conversation worth amplifying
+        - keep it false for regular entertaining confessions, romance, casual nostalgia, light humor, or niche personal stories
+        - be conservative; only mark true when a Story reshare would genuinely add value
+
         Confession Text:
         "{confession_text}"
 
@@ -182,6 +188,7 @@ class GeminiProcessor:
         - "sentiment": Positive, Negative, Neutral, or Mixed
         - "category": one exact value from the category list above
         - "summary_caption": the creative caption string
+        - "story_share_candidate": boolean
         """
 
         config = GenerateContentConfig(

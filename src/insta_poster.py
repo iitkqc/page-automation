@@ -32,6 +32,22 @@ class InstagramPoster:
         # if not self.access_token:
         #     print("Warning: INSTAGRAM_ACCESS_TOKEN not set.")
 
+    def upload_image_to_cloudinary(self, image_path: str, public_id: str) -> str:
+        """Upload a single image to Cloudinary and return its URL."""
+        try:
+            response = cloudinary.uploader.upload(
+                image_path,
+                public_id=public_id,
+                overwrite=True,
+                resource_type="image"
+            )
+            secure_url = response["secure_url"]
+            print(f"Uploaded image to Cloudinary: {secure_url}")
+            return secure_url
+        except Exception as e:
+            print(f"Error uploading image to Cloudinary: {e}")
+            return ""
+
     def upload_images_to_cloudinary(self, image_paths: List[str], row_num: int) -> List[str]:
         """Upload multiple images to Cloudinary and return URLs"""
         public_urls = []
@@ -156,6 +172,34 @@ class InstagramPoster:
                 print(f"Response: {e.response.text}")
             return ""
 
+    def create_instagram_story(self, image_url: str) -> str:
+        """Create an Instagram story container from an image URL."""
+        if not self.instagram_page_id or not self.access_token:
+            print("Instagram API credentials not set.")
+            return ""
+
+        url = f"{self.fb_graph_api_base}/{self.instagram_page_id}/media"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.access_token}"
+        }
+        params = {
+            "image_url": image_url,
+            "media_type": "STORIES",
+        }
+
+        try:
+            response = requests.post(url, headers=headers, params=params)
+            response.raise_for_status()
+            media_container_id = response.json().get("id", "")
+            print(f"Story media container created: {media_container_id}")
+            return media_container_id
+        except requests.exceptions.RequestException as e:
+            print(f"Error creating story media container: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                print(f"Response: {e.response.text}")
+            return ""
+
     def publish_instagram_post(self, media_container_id: str) -> str:
         """Publish the media container to Instagram and return the media ID."""
         if not self.instagram_page_id or not self.access_token:
@@ -237,6 +281,46 @@ class InstagramPoster:
         if not success:
             print("Generated comment failed to post.")
 
+    def share_confession_to_story(self, confession: Confession, generator: ConfessionImageGenerator, story_text: str | None = None) -> None:
+        """Best-effort story share for confessions flagged as socially resonant."""
+        if not confession.story_share_candidate:
+            return
+
+        print(f"Confession {confession.timestamp} flagged for story share. Creating story...")
+        story_image_path = ""
+
+        try:
+            story_image_path = generator.create_story_image(story_text)
+            if not story_image_path:
+                print("Failed to generate story image.")
+                return
+
+            story_url = self.upload_image_to_cloudinary(
+                story_image_path,
+                f"confessions/confession_{confession.row_num}_story"
+            )
+            if not story_url:
+                print("Failed to upload story image to Cloudinary.")
+                return
+
+            media_container_id = self.create_instagram_story(story_url)
+            if not media_container_id:
+                return
+
+            print("Waiting for Instagram to process story media...")
+            time.sleep(10)
+            story_id = self.publish_instagram_post(media_container_id)
+            if story_id:
+                print(f"Successfully shared confession {confession.timestamp} to Instagram Story!")
+        except Exception as e:
+            print(f"Story share failed for confession {confession.timestamp}: {e}")
+        finally:
+            if story_image_path:
+                try:
+                    os.remove(story_image_path)
+                except OSError:
+                    pass
+
     def schedule_instagram_post(self, confession: Confession) -> bool:
         """Main function to process confession and post to Instagram"""
         print(f"Processing confession: {confession.timestamp}")
@@ -302,6 +386,7 @@ class InstagramPoster:
                     post_id = self.publish_instagram_post(media_container_id)
                     if post_id:
                         self.post_generated_comments(post_id, confession)
+                        self.share_confession_to_story(confession, generator, slides[0])
                         print(f"Successfully posted reel for confession {confession.timestamp} to Instagram!")
                         # Clean up local files
                         try:
@@ -345,6 +430,7 @@ class InstagramPoster:
                     post_id = self.publish_instagram_post(media_container_id)
                     if post_id:
                         self.post_generated_comments(post_id, confession)
+                        self.share_confession_to_story(confession, generator, slides[0])
                         print(f"Successfully posted confession {confession.timestamp} to Instagram!")
                         # Clean up local images
                         for image_path in image_paths:

@@ -336,27 +336,30 @@ class ConfessionImageGenerator:
         panel_rgb = self.theme["panel"][:3]
         accent_rgb = self.theme["accent"][:3]
         text_rgb = self.theme["text"][:3]
+        bg_bottom_rgb = self.theme["bg_bottom"]
 
         mask = Image.new("L", (panel_width, panel_height), 0)
         mask_draw = ImageDraw.Draw(mask)
         mask_draw.rounded_rectangle((0, 0, panel_width - 1, panel_height - 1), radius=radius, fill=255)
 
-        panel = Image.new("RGBA", (panel_width, panel_height), self.theme["panel"])
+        base_alpha = min(220, self.theme["panel"][3] + 34)
+        panel = Image.new("RGBA", (panel_width, panel_height), panel_rgb + (base_alpha,))
         panel_draw = ImageDraw.Draw(panel)
 
         tile_size = max(56, min(panel_width, panel_height) // 6)
-        light_tile = self.interpolate_color(panel_rgb, accent_rgb, 0.24)
-        dark_tile = self.interpolate_color(panel_rgb, text_rgb, 0.1)
-        tile_alpha = min(52, max(24, self.theme["panel"][3] // 3))
+        light_tile = self.interpolate_color(panel_rgb, accent_rgb, 0.1)
+        dark_tile = self.interpolate_color(panel_rgb, bg_bottom_rgb, 0.5)
+        light_alpha = 18
+        dark_alpha = 34
 
         for row, y in enumerate(range(-tile_size, panel_height + tile_size, tile_size)):
             for col, x in enumerate(range(-tile_size, panel_width + tile_size, tile_size)):
                 is_light_tile = (row + col) % 2 == 0
                 fill_color = light_tile if is_light_tile else dark_tile
-                fill_alpha = tile_alpha if is_light_tile else max(14, tile_alpha - 10)
+                fill_alpha = light_alpha if is_light_tile else dark_alpha
                 panel_draw.rectangle((x, y, x + tile_size, y + tile_size), fill=fill_color + (fill_alpha,))
 
-        grid_alpha = min(42, max(18, tile_alpha - 6))
+        grid_alpha = 18
         grid_color = self.interpolate_color(panel_rgb, text_rgb, 0.3) + (grid_alpha,)
         for x in range(tile_size, panel_width, tile_size):
             panel_draw.line([(x, 0), (x, panel_height)], fill=grid_color, width=1)
@@ -367,18 +370,18 @@ class ConfessionImageGenerator:
         sheen_draw = ImageDraw.Draw(sheen)
         sheen_draw.ellipse(
             (-panel_width // 4, -panel_height // 3, panel_width // 2, panel_height // 3),
-            fill=accent_rgb + (50,),
+            fill=accent_rgb + (28,),
         )
         sheen_draw.ellipse(
             (panel_width // 3, panel_height // 2, panel_width + panel_width // 6, panel_height + panel_height // 4),
-            fill=text_rgb + (18,),
+            fill=text_rgb + (10,),
         )
         sheen = sheen.filter(ImageFilter.GaussianBlur(max(18, tile_size // 2)))
         panel = Image.alpha_composite(panel, sheen)
 
         diagonal_overlay = Image.new("RGBA", (panel_width, panel_height), (0, 0, 0, 0))
         diagonal_draw = ImageDraw.Draw(diagonal_overlay)
-        diagonal_color = accent_rgb + (22,)
+        diagonal_color = bg_bottom_rgb + (26,)
         for offset in range(-panel_height, panel_width, tile_size):
             diagonal_draw.line(
                 [(offset, panel_height), (offset + panel_height, 0)],
@@ -394,6 +397,12 @@ class ConfessionImageGenerator:
 
         draw = ImageDraw.Draw(image)
         draw.rounded_rectangle(bounds, radius=radius, outline=self.theme["outline"], width=outline_width)
+
+    def build_story_share_text(self) -> str:
+        slides = self.split_text_into_slides()
+        story_text = slides[0] if slides else self.confession.text.strip()
+        story_text = story_text.strip().strip('"')
+        return self.truncate_text(story_text, 240)
 
     def draw_badge(self, draw: ImageDraw.ImageDraw, x: int, y: int, text: str, font):
         text_width, text_height = self.measure_text(draw, text, font)
@@ -635,6 +644,61 @@ class ConfessionImageGenerator:
         )
 
         image_path = os.path.join(IMAGE_OUTPUT_DIR, f"confession_{self.confession.row_num}_reel.png")
+        img.save(image_path, optimize=True)
+        return image_path
+
+    def create_story_image(self, text: str | None = None) -> str:
+        story_width = 1080
+        story_height = 1920
+        img = self.create_gradient_background(story_width, story_height)
+        draw = ImageDraw.Draw(img)
+
+        story_text = self.truncate_text((text or self.build_story_share_text()).strip(), 240)
+        brand_font = self.load_font(34)
+        badge_font = self.load_font(26)
+        helper_font = self.load_font(30)
+        quote_font = self.load_font(170)
+
+        draw.text((story_width // 2, 128), "IITK QUICK CONFESSIONS", font=brand_font, fill=self.theme["text"], anchor="mm")
+        self.draw_badge(draw, 88, 182, self.get_confession_label(), badge_font)
+
+        category_label = self.get_category_label()
+        category_width, _ = self.measure_text(draw, category_label, badge_font)
+        self.draw_badge(draw, story_width - category_width - 180, 182, category_label, badge_font)
+
+        panel_bounds = (84, 382, story_width - 84, story_height - 292)
+        self.draw_patterned_panel(img, panel_bounds, radius=50, outline_width=3)
+        draw.text((146, 426), '"', font=quote_font, fill=self.theme["accent"])
+
+        max_text_width = panel_bounds[2] - panel_bounds[0] - 152
+        max_text_height = panel_bounds[3] - panel_bounds[1] - 220
+        body_font, lines, line_height = self.fit_font_to_panel(
+            draw,
+            story_text,
+            60,
+            36,
+            max_text_width,
+            max_text_height,
+            1.24,
+        )
+        total_text_height = len(lines) * line_height
+        start_y = panel_bounds[1] + ((panel_bounds[3] - panel_bounds[1] - total_text_height) // 2) + 14
+
+        for index, line in enumerate(lines):
+            line_width, _ = self.measure_text(draw, line, body_font)
+            x = (story_width - line_width) // 2
+            y = start_y + (index * line_height)
+            draw.text((x, y), line, font=body_font, fill=self.theme["text"])
+
+        draw.text(
+            (story_width // 2, story_height - 136),
+            "Full confession on feed",
+            font=helper_font,
+            fill=self.theme["accent"],
+            anchor="mm",
+        )
+
+        image_path = os.path.join(IMAGE_OUTPUT_DIR, f"confession_{self.confession.row_num}_story.png")
         img.save(image_path, optimize=True)
         return image_path
 

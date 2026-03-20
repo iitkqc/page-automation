@@ -12,6 +12,7 @@ class Confession:
     sigma_reply: Optional[str] = None
     pinned_comments: Optional[dict[str, str]] = None
     count: Optional[int] = None
+    story_share_candidate: bool = False
 
 @dataclass
 class ConfessionSelectionResponse:
@@ -30,3 +31,4 @@ class ModerationResponse:
     sentiment: str
     category: str
     summary_caption: str
+    story_share_candidate: bool
