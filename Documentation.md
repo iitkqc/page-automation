@@ -28,6 +28,8 @@ result = processor.moderate_and_shortlist_confession("Some confession text")
 **Sheet note**:
 - Add a `Post` column after `Status` in the first row if you want manual override posting.
 - Writing `1` in that `Post` cell bypasses Gemini moderation and shortlist selection for that confession.
+- If more than 2 rows have `Post = 1`, only those rows are processed in that run, with a maximum of 5 manual posts per run.
+- If 1 or 2 rows have `Post = 1`, those rows are posted and the normal AI pipeline also runs for regular rows.
 - After a successful post, the automation clears the `Post` cell and writes `1` to the `Status` column.
 
 **Usage**:
