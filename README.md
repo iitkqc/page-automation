@@ -65,7 +65,7 @@ MAX_CONFESSION_PER_RUN=8
 | Timestamp | Your Confession |	Status	| Post | {{Confession count}} | {{INSTAGRAM_ACCESS_TOKEN}} |
 |-----------|-----------------|---------|------|----------------------|----------------------------|
 
-Write `1` in the `Post` column to bypass Gemini moderation and shortlist selection for that confession. If more than 2 rows have `Post = 1`, the automation handles only those rows in that run, up to 5 manual posts maximum, and skips the AI pipeline. If 1 or 2 rows have `Post = 1`, those rows are posted and the normal AI pipeline also runs for the regular queue. After a successful post, the automation clears that `1` and writes `1` to the `Status` column.
+Write `1` in the `Post` column to bypass Gemini moderation and shortlist selection for that confession. Manual override posts still get AI-generated caption/admin-comment metadata before posting. If more than 2 rows have `Post = 1`, the automation handles only those rows in that run, up to 5 manual posts maximum, and skips the AI pipeline. If 1 or 2 rows have `Post = 1`, those rows are posted and the normal AI pipeline also runs for the regular queue. After a successful post, the automation clears that `1` and writes `1` to the `Status` column.
 
 ## File Structure
 ```

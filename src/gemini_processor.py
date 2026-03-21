@@ -5,7 +5,12 @@ from google import genai
 from google.genai.types import GenerateContentConfig, HarmBlockThreshold, HarmCategory, SafetySetting
 
 from content_taxonomy import IITK_CONTENT_CATEGORIES, get_category_display_name, normalize_category
-from model import Confession, ConfessionSelectionResponse, ModerationResponse
+from model import (
+    Confession,
+    ConfessionSelectionResponse,
+    ManualPostEnhancementResponse,
+    ModerationResponse,
+)
 
 
 class GeminiProcessor:
@@ -221,6 +226,111 @@ class GeminiProcessor:
         )
 
         result: ModerationResponse = response.parsed
+        result.category = normalize_category(result.category)
+        return result
+
+    def enrich_manual_post(self, confession_text: str) -> ManualPostEnhancementResponse:
+        """
+        Generates caption/comment metadata for a manual override post without moderation gating.
+        """
+        category_options = ", ".join(IITK_CONTENT_CATEGORIES)
+        prompt = f"""
+        You are helping prepare a manually approved IIT Kanpur confession post.
+        This confession has already been manually chosen for posting, so do not reject it and do not perform moderation.
+        Your job is only to generate metadata and social copy that fit the existing page style.
+
+        Determine the overall sentiment as one of: Positive, Negative, Neutral, Mixed.
+        Then classify the confession into exactly one IITK campus category from this list:
+        {category_options}
+
+        Category guidance:
+        - Pick the closest campus-native category, not a generic emotion label.
+        - Use hall_politics for hostel/hall drama, group tension, wing politics, or hostel power dynamics.
+        - Use mess_disaster for food, mess, canteen, menu, hygiene, or meal-related suffering.
+        - Use placement_meltdown for placements, job panic, rejection spirals, or career dread.
+        - Use exam_endsem_panic for exam pressure, endsems, midsems, grades, quizzes, or academic panic.
+        - Use prof_moment for professor incidents, faculty behavior, or memorable classroom moments.
+        - Use lab_assignment_suffering for lab work, assignments, submissions, reports, or academic grind.
+        - Use secret_crush for romance, crushes, pining, love, or almost-confessions.
+        - Use wing_nostalgia for hostel memories, batch nostalgia, late-night corridor feelings, or campus longing.
+        - Use fest_energy for Antaragni, Udghosh, events, clubs, stage energy, or fest chaos.
+        - Use cdc_intern_chaos for CDC, internships, resume stress, shortlists, or intern-season drama.
+        - Use convocation_feels for graduation, farewell, passing out, last-sem emotions, or convocation mood.
+        - Use campus_lore for legends, myths, iconic characters, or stories that feel like campus folklore.
+        - Use campus_life only if none of the above fit cleanly.
+
+        Caption rules:
+        - maximum 45 words total
+        - start with a strong hook, not a dry summary
+        - sound like a real campus confession page, not a brand campaign
+        - preserve the emotional vibe of the confession
+        - let the wording reflect the chosen IITK category
+        - add 2 to 4 relevant hashtags at the end
+        - avoid generic filler, emoji spam, and repetitive hashtags
+
+        Admin reply rules:
+        - 4 to 14 words
+        - playful, dry, teasing, warm, or deadpan
+        - no hashtags
+        - no cringe motivational lines
+        - leave it empty if nothing clever comes naturally
+
+        Also generate 3 pinned comment options:
+        1. funny_pinned_comment
+        2. empathetic_pinned_comment
+        3. discussion_pinned_comment
+
+        Funny pinned comment rules:
+        - 5 to 16 words
+        - sharp, quotable, scroll-stopping
+        - should sound like an admin with timing, not a random meme account
+
+        Empathetic pinned comment rules:
+        - 6 to 18 words
+        - warm, human, and emotionally aware
+        - should validate the vibe without sounding preachy or robotic
+
+        Discussion pinned comment rules:
+        - 6 to 18 words
+        - ask something specific, debatable, or instantly relatable
+        - avoid weak bait like "thoughts?" or "agree?"
+
+        General pinned comment rules:
+        - no hashtags
+        - no repeated wording across the 3 comment options
+
+        Story-share rules:
+        - set "story_share_candidate" to true only when the confession carries a clear social message, cautionary takeaway, mental-health resonance, harassment/safety signal, or a campus-wide conversation worth amplifying
+        - keep it false for regular entertaining confessions, romance, casual nostalgia, light humor, or niche personal stories
+        - be conservative
+
+        Confession Text:
+        "{confession_text}"
+
+        Output a JSON object with:
+        - "sentiment": Positive, Negative, Neutral, or Mixed
+        - "category": one exact value from the category list above
+        - "summary_caption": the creative caption string
+        - "admin_reply": admin reply string, or empty string
+        - "funny_pinned_comment": comment string, or empty string
+        - "empathetic_pinned_comment": comment string, or empty string
+        - "discussion_pinned_comment": comment string, or empty string
+        - "story_share_candidate": boolean
+        """
+
+        config = GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=ManualPostEnhancementResponse,
+        )
+
+        model_name = os.getenv("SHORTLISTING_MODEL") or os.getenv("MODERATION_MODEL")
+        response = self.client.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=config,
+        )
+
+        result: ManualPostEnhancementResponse = response.parsed
         result.category = normalize_category(result.category)
         return result
 

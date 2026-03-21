@@ -33,3 +33,16 @@ class ModerationResponse:
     category: str
     summary_caption: str
     story_share_candidate: bool
+
+
+@dataclass
+class ManualPostEnhancementResponse:
+    """Response schema for manual post caption/comment generation."""
+    sentiment: str
+    category: str
+    summary_caption: str
+    admin_reply: str
+    funny_pinned_comment: str
+    empathetic_pinned_comment: str
+    discussion_pinned_comment: str
+    story_share_candidate: bool

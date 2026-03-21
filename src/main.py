@@ -5,7 +5,7 @@ from datetime import datetime
 from google_form_reader import GoogleFormReader
 from gemini_processor import GeminiProcessor
 from insta_poster import InstagramPoster
-from model import Confession, ModerationResponse
+from model import Confession, ManualPostEnhancementResponse, ModerationResponse
 from typing import List
 
 class ConfessionAutomation:
@@ -209,7 +209,9 @@ class ConfessionAutomation:
         print(f"Confession automation finished at {datetime.now()}")
 
     def prepare_force_posts(self, confessions: List[Confession]) -> None:
-        """Populate safe defaults for manual override posts that skip Gemini."""
+        """Populate post metadata for manual override posts without moderation gating."""
+        gemini_ready = self.ensure_gemini_processor()
+
         for confession in confessions:
             confession.summary_caption = ""
             confession.sentiment = confession.sentiment or "Neutral"
@@ -217,6 +219,27 @@ class ConfessionAutomation:
             confession.sigma_reply = ""
             confession.pinned_comments = None
             confession.story_share_candidate = False
+
+            if not gemini_ready:
+                continue
+
+            try:
+                result: ManualPostEnhancementResponse = self.gemini_processor.enrich_manual_post(confession.text)
+                confession.summary_caption = result.summary_caption
+                confession.sentiment = result.sentiment
+                confession.category = result.category
+                confession.sigma_reply = result.admin_reply
+                confession.pinned_comments = {
+                    "funny": result.funny_pinned_comment,
+                    "empathetic": result.empathetic_pinned_comment,
+                    "discussion_bait": result.discussion_pinned_comment,
+                }
+                confession.story_share_candidate = result.story_share_candidate
+            except Exception as e:
+                print(
+                    f"Manual post enrichment failed for confession ID {confession.timestamp}: {e}. "
+                    "Continuing with fallback caption/comment defaults."
+                )
 
     def moderate_confessions(self, new_confessions: List[Confession]) -> List[Confession]:
         """Moderate confessions using Gemini and return safe ones."""
