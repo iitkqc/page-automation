@@ -27,17 +27,27 @@ class ConfessionAutomation:
         try:
             # Initialize Google Form Reader
             self.google_reader = GoogleFormReader(self.sheet_url)
-            
-            # Initialize Gemini Processor
-            self.gemini_processor = GeminiProcessor()
-            
+
             # Initialize Instagram Poster
             self.instagram_poster = InstagramPoster()
+            self.gemini_processor = None
             
             return True
             
         except Exception as e:
             print(f"Error setting up components: {e}")
+            return False
+
+    def ensure_gemini_processor(self) -> bool:
+        """Lazily initialize Gemini so manual override posts do not depend on it."""
+        if self.gemini_processor is not None:
+            return True
+
+        try:
+            self.gemini_processor = GeminiProcessor()
+            return True
+        except Exception as e:
+            print(f"Error setting up Gemini processor: {e}")
             return False
 
     def setup_instagram_token(self):
@@ -86,46 +96,70 @@ class ConfessionAutomation:
         # Read confessions from the sheet
         new_confessions = self.google_reader.get_latest_confessions_from_sheet()
         print(f"Found {len(new_confessions)} new confessions from sheet.")
-        if len(new_confessions) < self.total_confessions_to_choose_from:
-            print(f"Not enough confessions to process. Minimum {self.total_confessions_to_choose_from} required.")
-            print("Exiting")
-            return
-        
-        new_confessions = new_confessions[-self.total_confessions_to_choose_from:]  # Limit to last confessions for rate limiting
-        print(f"Processing {len(new_confessions)} confessions for moderation.")
 
         if not new_confessions:
             print("No new confessions found in the Google Sheet.")
             return
 
-        # Process and moderate confessions
-        shortlisted_posts = self.moderate_confessions(new_confessions)
-        
-        if not shortlisted_posts:
-            print("No safe confessions found for posting.")
-            return
+        force_post_confessions = [item for item in new_confessions if item.force_post]
+        regular_confessions = [item for item in new_confessions if not item.force_post]
+        ai_candidates = []
+        ai_selected_posts = []
 
-        # Select top confessions
-        print(f"Selecting top {self.max_confession_per_run} confessions based on creativity and potential reach...")
-        shortlisted_posts = self.gemini_processor.select_top_confessions(
-            shortlisted_posts, 
-            max_count=self.max_confession_per_run
-        )
-        print(f"Selected {len(shortlisted_posts)} top confessions for posting.")
+        if force_post_confessions:
+            print(
+                f"Found {len(force_post_confessions)} manual override confession(s). "
+                "These will bypass Gemini moderation and selection."
+            )
+            self.prepare_force_posts(force_post_confessions)
+
+        if len(regular_confessions) >= self.total_confessions_to_choose_from:
+            if not self.ensure_gemini_processor():
+                if not force_post_confessions:
+                    print("Gemini setup failed and there are no manual override posts to continue with.")
+                    return
+                print("Skipping AI-reviewed confessions because Gemini setup failed.")
+                regular_confessions = []
+            else:
+                ai_candidates = regular_confessions[-self.total_confessions_to_choose_from:]
+                print(f"Processing {len(ai_candidates)} confessions for moderation.")
+
+                ai_selected_posts = self.moderate_confessions(ai_candidates)
+
+                if ai_selected_posts:
+                    print(
+                        f"Selecting top {self.max_confession_per_run} confessions "
+                        "based on creativity and potential reach..."
+                    )
+                    ai_selected_posts = self.gemini_processor.select_top_confessions(
+                        ai_selected_posts,
+                        max_count=self.max_confession_per_run
+                    )
+                    print(f"Selected {len(ai_selected_posts)} top confessions for posting.")
+                else:
+                    print("No safe AI-reviewed confessions found for posting.")
+        elif regular_confessions:
+            print(
+                f"Found only {len(regular_confessions)} regular confession(s). "
+                f"Need at least {self.total_confessions_to_choose_from} for AI shortlisting, "
+                "so leaving them untouched for a later run."
+            )
+
+        shortlisted_posts = force_post_confessions + ai_selected_posts
+
+        if not shortlisted_posts:
+            print("No confessions ready for posting.")
+            return
 
         # Schedule posts and track which ones were successfully scheduled
         attempted_rows = self.schedule_posts(shortlisted_posts)
 
-        # Only mark confessions as 0 if the system processed at least one post
-        # This prevents marking everyone as 0 in case of system-wide failure
+        # Only mark AI-reviewed confessions as 0 if the system processed at least one post.
+        # Manual override confessions are never marked as rejected here.
         if attempted_rows:
-            # Mark confessions that were in new_confessions but not selected for posting
-            # (rejected during moderation/selection)
-            total_rows = [item.row_num for item in new_confessions]
-            shortlisted_rows = [item.row_num for item in shortlisted_posts]
-            
-            # Confessions that were never selected for posting (rejected)
-            rejected_rows = set(total_rows) - set(shortlisted_rows)
+            ai_candidate_rows = [item.row_num for item in ai_candidates]
+            ai_selected_rows = [item.row_num for item in ai_selected_posts]
+            rejected_rows = set(ai_candidate_rows) - set(ai_selected_rows)
             for row in rejected_rows:
                 self.google_reader.mark_confession_as_processed(row, 0)
                 print(f"Marked row {row} as NOT POSTED (rejected during selection) in Google Sheet.")
@@ -135,6 +169,16 @@ class ConfessionAutomation:
         # Cleanup
         self.instagram_poster.delete_all_assets()
         print(f"Confession automation finished at {datetime.now()}")
+
+    def prepare_force_posts(self, confessions: List[Confession]) -> None:
+        """Populate safe defaults for manual override posts that skip Gemini."""
+        for confession in confessions:
+            confession.summary_caption = ""
+            confession.sentiment = confession.sentiment or "Neutral"
+            confession.category = confession.category or "campus_life"
+            confession.sigma_reply = ""
+            confession.pinned_comments = None
+            confession.story_share_candidate = False
 
     def moderate_confessions(self, new_confessions: List[Confession]) -> List[Confession]:
         """Moderate confessions using Gemini and return safe ones."""
@@ -186,7 +230,11 @@ class ConfessionAutomation:
                     print(f"Successfully scheduled confession ID: {post_data.timestamp} to Instagram!")
                     # Mark as processed in sheet with status 1 (success)
                     self.google_reader.increment_count()
-                    self.google_reader.mark_confession_as_processed(post_data.row_num, 1)
+                    self.google_reader.mark_confession_as_processed(
+                        post_data.row_num,
+                        1,
+                        clear_manual_post=post_data.force_post,
+                    )
                     attempted_rows.add(post_data.row_num)
                 else:
                     print(f"Failed to schedule post for confession ID: {post_data.timestamp}")

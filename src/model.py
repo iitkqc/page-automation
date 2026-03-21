@@ -13,6 +13,7 @@ class Confession:
     pinned_comments: Optional[dict[str, str]] = None
     count: Optional[int] = None
     story_share_candidate: bool = False
+    force_post: bool = False
 
 @dataclass
 class ConfessionSelectionResponse:

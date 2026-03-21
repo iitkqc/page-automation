@@ -20,10 +20,15 @@ result = processor.moderate_and_shortlist_confession("Some confession text")
 **Key Methods**:
 - `__init__(sheet_url, credentials_path)`: Initializes with sheet URL and credentials
 - `get_latest_confessions_from_sheet()`: Fetches new confessions
-- `mark_confession_as_processed(row, status)`: Marks confessions as processed
+- `mark_confession_as_processed(row, status, clear_manual_post=False)`: Marks confessions as processed and can clear the manual override cell
 - `get_updated_count()`: Updates and returns confession count
 - `get_instagram_access_token()`: Retrieves Instagram token
 - `set_instagram_access_token(token)`: Updates Instagram token
+
+**Sheet note**:
+- Add a `Post` column after `Status` in the first row if you want manual override posting.
+- Writing `1` in that `Post` cell bypasses Gemini moderation and shortlist selection for that confession.
+- After a successful post, the automation clears the `Post` cell and writes `1` to the `Status` column.
 
 **Usage**:
 ```python

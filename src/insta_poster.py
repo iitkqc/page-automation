@@ -107,6 +107,21 @@ class InstagramPoster:
             print(f"Error uploading reel to Cloudinary: {e}")
             return ""
 
+    def build_post_caption(self, caption: str | None, sigma_reply: str | None) -> str:
+        """Build the final caption string without leaking None values into the post."""
+        hashtag_block = (
+            "#IITKQuickConfessions #IITKConfessions #confession "
+            "#iitk #iitkanpur #iit #jee #jeeadvanced #jeemains"
+        )
+        admin_reply = (sigma_reply or "").strip()
+        clean_caption = (caption or "").strip()
+
+        if admin_reply:
+            return f"Admin reply: {admin_reply}\n\n{hashtag_block}"
+        if clean_caption:
+            return f"{clean_caption}\n\n{hashtag_block}"
+        return hashtag_block
+
     def create_instagram_carousel(self, image_urls: List[str], caption: str | None, sigma_reply: str | None) -> str:
         """Create Instagram carousel post"""
         if not self.instagram_page_id or not self.access_token:
@@ -149,7 +164,7 @@ class InstagramPoster:
         carousel_params = {
             'media_type': 'CAROUSEL',
             'children': ','.join(media_ids),
-            'caption': f"{f'Admin reply: {sigma_reply}\n' if sigma_reply else caption} \n\n#IITKQuickConfessions #IITKConfessions #confession #iitk #iitkanpur #iit #jee #jeeadvanced #jeemains",
+            'caption': self.build_post_caption(caption, sigma_reply),
             'access_token': self.access_token
         }
         
@@ -179,7 +194,7 @@ class InstagramPoster:
         data = {
             'media_type': 'REELS',
             'video_url': video_url,
-            'caption': f"{f'Admin reply: {sigma_reply}\n' if sigma_reply else caption}  \n\n#IITKQuickConfessions #IITKConfessions #confession #iitk #iitkanpur #iit #jee #jeeadvanced #jeemains",
+            'caption': self.build_post_caption(caption, sigma_reply),
         }
         
         try:

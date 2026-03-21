@@ -21,6 +21,8 @@ This project automates the process of:
 - ✅ Duplicate prevention system
 - 📊 Google Sheets integration for confession management
 
+Manual override posting is also supported through the Google Sheet.
+
 Note: Detailed documentation can be found at: [documentation](Documentation.md).
 
 ## Tech Stack
@@ -60,8 +62,10 @@ MAX_CONFESSION_PER_RUN=8
 
 ## Google form response sheet header should look like
 
-| Timestamp | Your Confession |	Status	| {{Confession count}} | {{INSTAGRAM_ACCESS_TOKEN}} |
-|-----------|-----------------|---------|----------------------|----------------------------|
+| Timestamp | Your Confession |	Status	| Post | {{Confession count}} | {{INSTAGRAM_ACCESS_TOKEN}} |
+|-----------|-----------------|---------|------|----------------------|----------------------------|
+
+Write `1` in the `Post` column to bypass Gemini moderation and shortlist selection for that confession. After a successful post, the automation clears that `1` and writes `1` to the `Status` column.
 
 ## File Structure
 ```
