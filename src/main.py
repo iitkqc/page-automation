@@ -160,9 +160,13 @@ class ConfessionAutomation:
                 )
 
         shortlisted_posts = shortlisted_posts[:self.max_confession_per_run]
+        ai_rejection_story_posted = False
 
         if not shortlisted_posts:
+            if ai_candidates:
+                ai_rejection_story_posted = self.post_ai_rejection_summary_story(ai_candidates)
             print("No confessions ready for posting.")
+            self.instagram_poster.delete_all_assets()
             return
 
         # Schedule posts and track which ones were successfully scheduled
@@ -179,6 +183,9 @@ class ConfessionAutomation:
                 print(f"Marked row {row} as NOT POSTED (rejected during selection) in Google Sheet.")
         else:
             print("No posts were attempted. System may have failed. Not marking confessions as processed.")
+
+        if ai_candidates and not ai_rejection_story_posted:
+            self.post_ai_rejection_summary_story(ai_candidates)
 
         # Cleanup
         self.instagram_poster.delete_all_assets()
@@ -225,6 +232,7 @@ class ConfessionAutomation:
             print(f"\nProcessing confession ID: {confession.timestamp}")
 
             if len(confession.text) < 60:
+                confession.rejection_reason = "too short or low-detail for the feed"
                 print(f"Confession ID {confession.timestamp} is too short to process. Skipping.")
                 continue
             
@@ -242,12 +250,81 @@ class ConfessionAutomation:
                 confession.category = gemini_result.category
                 confession.summary_caption = gemini_result.summary_caption
                 confession.story_share_candidate = gemini_result.story_share_candidate
+                confession.rejection_reason = ""
                 shortlisted_confessions.append(confession)
             else:
+                confession.rejection_reason = gemini_result.rejection_reason.strip() or "not safe for the feed"
                 print(f"Confession deemed UNSAFE: {gemini_result.rejection_reason}")
 
         print(f"\nFound {len(shortlisted_confessions)} safe confessions.")
         return shortlisted_confessions
+
+    def normalize_rejection_reason_for_story(self, reason: str) -> str:
+        """Convert raw rejection reasons into indirect, content-safe story copy."""
+        cleaned_reason = " ".join((reason or "").lower().split())
+        if not cleaned_reason:
+            return ""
+
+        if any(keyword in cleaned_reason for keyword in ("harass", "hate", "abuse", "unsafe", "stalk", "threat", "violent", "danger")):
+            return "not safe for a public campus feed"
+        if any(keyword in cleaned_reason for keyword in ("sexual", "explicit", "nsfw")):
+            return "too explicit for the feed"
+        if any(keyword in cleaned_reason for keyword in ("personal", "private", "identif", "revealing", "doxx")):
+            return "too personal or revealing"
+        if any(keyword in cleaned_reason for keyword in ("repet", "similar", "duplicate")):
+            return "too repetitive with other submissions"
+        if any(keyword in cleaned_reason for keyword in ("generic", "weak", "hook", "specific", "detail", "flat")):
+            return "low detail or weak hook"
+        if any(keyword in cleaned_reason for keyword in ("campus-native", "campus native", "iitk", "broad campus")):
+            return "not campus-native enough"
+        if "niche" in cleaned_reason:
+            return "too niche for a broad campus audience"
+        if any(keyword in cleaned_reason for keyword in ("advice", "forum")):
+            return "better suited for advice, not the feed"
+        if "short" in cleaned_reason:
+            return "too short or low-detail for the feed"
+
+        return reason.strip(" .")[:60]
+
+    def build_ai_rejection_story_text(self, ai_candidates: List[Confession]) -> str:
+        """Create a short, indirect story summary for AI-rejected confessions."""
+        unique_reasons = []
+        seen_reasons = set()
+
+        for confession in ai_candidates:
+            reason = self.normalize_rejection_reason_for_story(confession.rejection_reason or "")
+            if not reason:
+                continue
+
+            normalized_reason = " ".join(reason.split()).strip(" .")
+            dedupe_key = normalized_reason.lower()
+            if dedupe_key in seen_reasons:
+                continue
+
+            seen_reasons.add(dedupe_key)
+            unique_reasons.append(normalized_reason[:60])
+
+        if not unique_reasons:
+            return ""
+
+        reason_lines = "\n".join(f"- {reason}" for reason in unique_reasons[:3])
+        return (
+            "Why some confessions were skipped today:\n\n"
+            f"{reason_lines}\n\n"
+            "Specific, campus-native, safe stories travel better."
+        )
+
+    def post_ai_rejection_summary_story(self, ai_candidates: List[Confession]) -> bool:
+        """Best-effort story share summarizing why some AI-reviewed confessions were skipped."""
+        story_text = self.build_ai_rejection_story_text(ai_candidates)
+        if not story_text:
+            return False
+
+        print("Posting AI rejection summary story...")
+        return self.instagram_poster.share_text_story(
+            story_text,
+            public_id_suffix=f"ai_rejection_summary_{int(datetime.now().timestamp())}",
+        )
 
     def schedule_posts(self, shortlisted_posts: List[Confession]) -> set:
         """

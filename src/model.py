@@ -14,6 +14,7 @@ class Confession:
     count: Optional[int] = None
     story_share_candidate: bool = False
     force_post: bool = False
+    rejection_reason: Optional[str] = None
 
 @dataclass
 class ConfessionSelectionResponse:
@@ -23,6 +24,7 @@ class ConfessionSelectionResponse:
     funny_pinned_comments: List[str]
     empathetic_pinned_comments: List[str]
     discussion_pinned_comments: List[str]
+    rejection_reasons: List[str]
 
 @dataclass
 class ModerationResponse:

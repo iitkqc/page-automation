@@ -70,6 +70,14 @@ class GeminiProcessor:
         2. empathetic_pinned_comment
         3. discussion_pinned_comment
 
+        Also provide a short rejection reason for every confession you do not select.
+        Rejection-reason rules:
+        - keep each reason to 3 to 10 words
+        - keep it general and indirect
+        - never quote, paraphrase, or reveal submission details
+        - mention only broad signals like repetitive vibe, weak hook, low specificity, not campus-native enough, too niche, too advice-seeking, or not safe for feed
+        - return an empty string for selected confessions
+
         These pinned comments must feel more engaging than generic filler.
 
         Funny pinned comment rules:
@@ -105,6 +113,7 @@ class GeminiProcessor:
         - "funny_pinned_comments": same length as indices
         - "empathetic_pinned_comments": same length as indices
         - "discussion_pinned_comments": same length as indices
+        - "rejection_reasons": same length as the full confession list, with empty strings for selected confessions
         """
 
         config = GenerateContentConfig(
@@ -135,7 +144,18 @@ class GeminiProcessor:
                 "empathetic": result.empathetic_pinned_comments[position] if position < len(result.empathetic_pinned_comments) else "",
                 "discussion_bait": result.discussion_pinned_comments[position] if position < len(result.discussion_pinned_comments) else "",
             }
+            confession.rejection_reason = ""
             selected_confessions.append(confession)
+
+        for position, confession in enumerate(confessions):
+            if (position + 1) in seen_indices:
+                continue
+            reason = (
+                result.rejection_reasons[position].strip()
+                if position < len(result.rejection_reasons)
+                else ""
+            )
+            confession.rejection_reason = reason or "not a strong enough fit this run"
 
         return selected_confessions
 

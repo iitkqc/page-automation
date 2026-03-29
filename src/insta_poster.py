@@ -371,6 +371,58 @@ class InstagramPoster:
                 except OSError:
                     pass
 
+    def share_text_story(self, story_text: str, public_id_suffix: str) -> bool:
+        """Post a best-effort story from standalone text."""
+        cleaned_story_text = (story_text or "").strip()
+        if not cleaned_story_text:
+            return False
+
+        story_confession = Confession(
+            timestamp=str(int(time.time())),
+            row_num=0,
+            text=cleaned_story_text,
+            sentiment="Neutral",
+            category="campus_life",
+        )
+        generator = ConfessionImageGenerator(story_confession)
+        story_image_path = ""
+
+        try:
+            story_image_path = generator.create_story_image(cleaned_story_text)
+            if not story_image_path:
+                print("Failed to generate summary story image.")
+                return False
+
+            story_url = self.upload_image_to_cloudinary(
+                story_image_path,
+                f"confessions/{public_id_suffix}"
+            )
+            if not story_url:
+                print("Failed to upload summary story image to Cloudinary.")
+                return False
+
+            media_container_id = self.create_instagram_story(story_url)
+            if not media_container_id:
+                return False
+
+            print("Waiting for Instagram to process summary story media...")
+            time.sleep(10)
+            story_id = self.publish_instagram_post(media_container_id, retry_delays=[5, 10, 15])
+            if story_id:
+                print("Successfully shared summary story to Instagram!")
+                return True
+
+            return False
+        except Exception as e:
+            print(f"Summary story share failed: {e}")
+            return False
+        finally:
+            if story_image_path:
+                try:
+                    os.remove(story_image_path)
+                except OSError:
+                    pass
+
     def schedule_instagram_post(self, confession: Confession) -> bool:
         """Main function to process confession and post to Instagram"""
         print(f"Processing confession: {confession.timestamp}")
