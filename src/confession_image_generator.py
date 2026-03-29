@@ -670,14 +670,22 @@ class ConfessionImageGenerator:
         img.save(image_path, optimize=True)
         return image_path
 
-    def create_story_image(self, text: str | None = None) -> str:
+    def create_story_image(
+        self,
+        text: str | None = None,
+        footer_text: str = "Full confession on feed",
+        max_chars: int = 240,
+        start_size: int = 64,
+    ) -> str:
         story_width = 1080
         story_height = 1920
         img = self.create_monochrome_background(story_width, story_height)
         draw = ImageDraw.Draw(img)
 
-        story_text = self.truncate_text((text or self.build_story_share_text()).strip(), 240)
+        story_text = self.truncate_text((text or self.build_story_share_text()).strip(), max_chars)
         helper_font = self.load_font(30)
+        has_footer = bool((footer_text or "").strip())
+        text_bottom = story_height - 270 if has_footer else story_height - 180
         self.draw_monochrome_header(
             draw,
             story_width,
@@ -689,20 +697,21 @@ class ConfessionImageGenerator:
         self.draw_centered_text_block(
             draw,
             story_text,
-            bounds=(110, 330, story_width - 110, story_height - 270),
-            start_size=64,
+            bounds=(110, 330, story_width - 110, text_bottom),
+            start_size=start_size,
             min_size=36,
             line_height_factor=1.2,
             fill=MONOCHROME_COLORS["text"],
         )
 
-        draw.text(
-            (story_width // 2, story_height - 136),
-            "Full confession on feed",
-            font=helper_font,
-            fill=MONOCHROME_COLORS["accent"],
-            anchor="mm",
-        )
+        if has_footer:
+            draw.text(
+                (story_width // 2, story_height - 136),
+                footer_text,
+                font=helper_font,
+                fill=MONOCHROME_COLORS["accent"],
+                anchor="mm",
+            )
 
         image_path = os.path.join(IMAGE_OUTPUT_DIR, f"confession_{self.confession.row_num}_story.png")
         img.save(image_path, optimize=True)

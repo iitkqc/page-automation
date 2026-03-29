@@ -76,7 +76,8 @@ class GeminiProcessor:
         - write it as one polished sentence in natural English
         - keep it indirect and public-facing
         - never quote, paraphrase, or reveal submission details
-        - help the writer understand what missed: weak specificity, repetitive vibe, low emotional depth, too niche, too advice-driven, not campus-native enough, manipulative tone, or not safe for feed
+        - whenever relevant, anchor the reason in broad page-level angles like serious allegations, manipulative dynamics, safety-line issues, or details too revealing for a public page
+        - otherwise use broad quality angles like weak specificity, repetitive vibe, low emotional depth, too niche, too advice-driven, or not campus-native enough
         - avoid generic filler like "not selected this time" or "didn't make the cut"
         - return an empty string for selected confessions
 
@@ -216,6 +217,7 @@ class GeminiProcessor:
         - keep it indirect and content-safe
         - never quote or restate the confession
         - make the issue understandable without revealing specifics
+        - whenever relevant, express it as a broad page-level issue like serious allegation, safety concern, manipulative dynamic, or overly revealing detail
 
         Output a JSON object with:
         - "is_safe": boolean

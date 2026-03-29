@@ -388,7 +388,12 @@ class InstagramPoster:
         story_image_path = ""
 
         try:
-            story_image_path = generator.create_story_image(cleaned_story_text)
+            story_image_path = generator.create_story_image(
+                cleaned_story_text,
+                footer_text="",
+                max_chars=165,
+                start_size=58,
+            )
             if not story_image_path:
                 print("Failed to generate summary story image.")
                 return False
