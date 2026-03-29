@@ -70,12 +70,14 @@ class GeminiProcessor:
         2. empathetic_pinned_comment
         3. discussion_pinned_comment
 
-        Also provide a short rejection reason for every confession you do not select.
+        Also provide a short story-ready rejection reason for every confession you do not select.
         Rejection-reason rules:
-        - keep each reason to 3 to 10 words
-        - keep it general and indirect
+        - keep each reason to 8 to 16 words
+        - write it as one polished sentence in natural English
+        - keep it indirect and public-facing
         - never quote, paraphrase, or reveal submission details
-        - mention only broad signals like repetitive vibe, weak hook, low specificity, not campus-native enough, too niche, too advice-seeking, or not safe for feed
+        - help the writer understand what missed: weak specificity, repetitive vibe, low emotional depth, too niche, too advice-driven, not campus-native enough, manipulative tone, or not safe for feed
+        - avoid generic filler like "not selected this time" or "didn't make the cut"
         - return an empty string for selected confessions
 
         These pinned comments must feel more engaging than generic filler.
@@ -155,7 +157,7 @@ class GeminiProcessor:
                 if position < len(result.rejection_reasons)
                 else ""
             )
-            confession.rejection_reason = reason or "not a strong enough fit this run"
+            confession.rejection_reason = reason or "It was not a strong enough fit for the feed this time."
 
         return selected_confessions
 
@@ -207,9 +209,17 @@ class GeminiProcessor:
         Confession Text:
         "{confession_text}"
 
+        If the confession is not safe, make "rejection_reason" a short public-facing sentence that could be safely echoed in a Story summary.
+        Rejection-reason rules:
+        - keep it to 8 to 16 words
+        - write in natural, grammatically clean English
+        - keep it indirect and content-safe
+        - never quote or restate the confession
+        - make the issue understandable without revealing specifics
+
         Output a JSON object with:
         - "is_safe": boolean
-        - "rejection_reason": brief reason if not safe, otherwise empty string
+        - "rejection_reason": short public-facing reason if not safe, otherwise empty string
         - "sentiment": Positive, Negative, Neutral, or Mixed
         - "category": one exact value from the category list above
         - "summary_caption": the creative caption string

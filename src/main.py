@@ -232,7 +232,7 @@ class ConfessionAutomation:
             print(f"\nProcessing confession ID: {confession.timestamp}")
 
             if len(confession.text) < 60:
-                confession.rejection_reason = "too short or low-detail for the feed"
+                confession.rejection_reason = "It felt too brief and underdeveloped for the feed."
                 print(f"Confession ID {confession.timestamp} is too short to process. Skipping.")
                 continue
             
@@ -253,7 +253,10 @@ class ConfessionAutomation:
                 confession.rejection_reason = ""
                 shortlisted_confessions.append(confession)
             else:
-                confession.rejection_reason = gemini_result.rejection_reason.strip() or "not safe for the feed"
+                confession.rejection_reason = (
+                    gemini_result.rejection_reason.strip()
+                    or "It did not feel safe enough for a public campus feed."
+                )
                 print(f"Confession deemed UNSAFE: {gemini_result.rejection_reason}")
 
         print(f"\nFound {len(shortlisted_confessions)} safe confessions.")
@@ -266,25 +269,22 @@ class ConfessionAutomation:
             return ""
 
         if any(keyword in cleaned_reason for keyword in ("harass", "hate", "abuse", "unsafe", "stalk", "threat", "violent", "danger")):
-            return "not safe for a public campus feed"
+            return "It did not feel safe enough for a public campus feed."
         if any(keyword in cleaned_reason for keyword in ("sexual", "explicit", "nsfw")):
-            return "too explicit for the feed"
+            return "It was too explicit for the page."
         if any(keyword in cleaned_reason for keyword in ("personal", "private", "identif", "revealing", "doxx")):
-            return "too personal or revealing"
-        if any(keyword in cleaned_reason for keyword in ("repet", "similar", "duplicate")):
-            return "too repetitive with other submissions"
-        if any(keyword in cleaned_reason for keyword in ("generic", "weak", "hook", "specific", "detail", "flat")):
-            return "low detail or weak hook"
-        if any(keyword in cleaned_reason for keyword in ("campus-native", "campus native", "iitk", "broad campus")):
-            return "not campus-native enough"
-        if "niche" in cleaned_reason:
-            return "too niche for a broad campus audience"
-        if any(keyword in cleaned_reason for keyword in ("advice", "forum")):
-            return "better suited for advice, not the feed"
+            return "It felt too personal or too revealing for a public page."
         if "short" in cleaned_reason:
-            return "too short or low-detail for the feed"
+            return "It felt too brief and underdeveloped for the feed."
 
-        return reason.strip(" .")[:60]
+        normalized_reason = reason.strip()
+        if not normalized_reason:
+            return ""
+
+        if normalized_reason[-1] not in ".!?":
+            normalized_reason = f"{normalized_reason}."
+
+        return normalized_reason[:110]
 
     def build_ai_rejection_story_text(self, ai_candidates: List[Confession]) -> str:
         """Create a short, indirect story summary for AI-rejected confessions."""
@@ -307,12 +307,11 @@ class ConfessionAutomation:
         if not unique_reasons:
             return ""
 
-        reason_lines = "\n".join(f"- {reason}" for reason in unique_reasons[:3])
-        return (
-            "Why some confessions were skipped today:\n\n"
-            f"{reason_lines}\n\n"
-            "Specific, campus-native, safe stories travel better."
-        )
+        summary_sentences = []
+        for reason in unique_reasons[:2]:
+            summary_sentences.append(reason[0].upper() + reason[1:] if reason else reason)
+
+        return "Why some confessions were skipped today.\n\n" + " ".join(summary_sentences)
 
     def post_ai_rejection_summary_story(self, ai_candidates: List[Confession]) -> bool:
         """Best-effort story share summarizing why some AI-reviewed confessions were skipped."""
