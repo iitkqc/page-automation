@@ -299,6 +299,19 @@ class ConfessionAutomation:
             return f"{angles[0]} or {angles[1]}"
         return f"{angles[0]}, {angles[1]}, or {angles[2]}"
 
+    def build_story_follow_up(self, angle_keys: List[str]) -> str:
+        """Add one extra line so the rejection story feels informative, not flat."""
+        key_set = set(angle_keys)
+
+        if key_set & {"serious_allegations", "too_revealing", "safety_lines", "too_explicit"}:
+            return "If it risks unsafe callouts or exposing private details, it stays off the feed."
+        if "manipulative_dynamics" in key_set:
+            return "Messy campus stories can stay. Glorifying manipulation usually will not."
+        if key_set & {"too_thin", "not_iitk_enough", "too_niche", "advice_post"}:
+            return "The strongest posts usually feel specific, campus-rooted, and built around a real moment."
+
+        return "The feed works best when the story is sharp, safe, and recognizably campus-native."
+
     def build_ai_rejection_story_text(self, ai_candidates: List[Confession]) -> str:
         """Create a concise, audience-friendly story summary for selected rejection angles."""
         rejected_reasons = [
@@ -324,24 +337,28 @@ class ConfessionAutomation:
 
             seen_keys.add(angle_key)
             if is_engaging:
-                engaging_angles.append(angle_text)
+                engaging_angles.append((angle_key, angle_text))
             else:
-                fallback_angles.append(angle_text)
+                fallback_angles.append((angle_key, angle_text))
 
         if not engaging_angles:
             return ""
 
-        selected_angles = engaging_angles[:2]
-        if len(selected_angles) < 2 and fallback_angles:
-            selected_angles.append(fallback_angles[0])
+        selected_angle_items = engaging_angles[:2]
+        if len(selected_angle_items) < 2 and fallback_angles:
+            selected_angle_items.append(fallback_angles[0])
 
-        combined_angles = self.join_story_angles(selected_angles[:2])
+        selected_angle_texts = [angle_text for _, angle_text in selected_angle_items[:2]]
+        selected_angle_keys = [angle_key for angle_key, _ in selected_angle_items[:2]]
+        combined_angles = self.join_story_angles(selected_angle_texts)
         if not combined_angles:
             return ""
 
+        follow_up = self.build_story_follow_up(selected_angle_keys)
         return (
             "What quietly gets a confession skipped?\n\n"
-            f"Usually things like {combined_angles}."
+            f"Usually things like {combined_angles}.\n"
+            f"{follow_up}"
         )
 
     def post_ai_rejection_summary_story(self, ai_candidates: List[Confession]) -> bool:
