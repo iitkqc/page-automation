@@ -14,9 +14,9 @@ class ConfessionAutomation:
         self.sheet_url = os.getenv("GOOGLE_SHEET_URL")
         self.credentials_json_base64 = os.getenv("GOOGLE_SHEETS_CREDENTIALS_FILE")
         self.instagram_page_id = os.getenv("INSTAGRAM_PAGE_ID")
-        self.max_confession_per_run = int(os.getenv("MAX_CONFESSION_PER_RUN", 4))
+        configured_post_limit = int(os.getenv("MAX_CONFESSION_PER_RUN", 2))
+        self.max_confession_per_run = max(1, min(configured_post_limit, 2))
         self.total_confessions_to_choose_from = 5
-        self.manual_post_limit_per_run = 5
         
         # Initialize components
         self.google_reader = None
@@ -106,84 +106,60 @@ class ConfessionAutomation:
         regular_confessions = [item for item in new_confessions if not item.force_post]
         ai_candidates = []
         ai_selected_posts = []
+        shortlisted_posts = []
+        remaining_slots = self.max_confession_per_run
 
         if force_post_confessions:
-            if len(force_post_confessions) > 2:
-                prioritized_force_posts = force_post_confessions[:self.manual_post_limit_per_run]
-                print(
-                    f"Found {len(force_post_confessions)} manual override confession(s). "
-                    f"Posting up to {self.manual_post_limit_per_run} of them this run and skipping AI selection."
-                )
-                self.prepare_force_posts(prioritized_force_posts)
-                shortlisted_posts = prioritized_force_posts
-            else:
-                print(
-                    f"Found {len(force_post_confessions)} manual override confession(s). "
-                    "Posting them first and also running the normal AI selection flow this run."
-                )
-                self.prepare_force_posts(force_post_confessions)
-                shortlisted_posts = force_post_confessions
-
-                if len(regular_confessions) >= self.total_confessions_to_choose_from:
-                    if not self.ensure_gemini_processor():
-                        print("Gemini setup failed while manual override posts are present, so only the override rows will be posted.")
-                    else:
-                        ai_candidates = regular_confessions[-self.total_confessions_to_choose_from:]
-                        print(f"Processing {len(ai_candidates)} confessions for moderation.")
-
-                        ai_selected_posts = self.moderate_confessions(ai_candidates)
-
-                        if ai_selected_posts:
-                            print(
-                                f"Selecting top {self.max_confession_per_run} confessions "
-                                "based on creativity and potential reach..."
-                            )
-                            ai_selected_posts = self.gemini_processor.select_top_confessions(
-                                ai_selected_posts,
-                                max_count=self.max_confession_per_run
-                            )
-                            print(f"Selected {len(ai_selected_posts)} top confessions for posting.")
-                            shortlisted_posts.extend(ai_selected_posts)
-                        else:
-                            print("No safe AI-reviewed confessions found for posting.")
-                elif regular_confessions:
-                    print(
-                        f"Found only {len(regular_confessions)} regular confession(s). "
-                        f"Need at least {self.total_confessions_to_choose_from} for AI shortlisting, "
-                        "so only the manual override rows will be posted this run."
-                    )
-        elif len(regular_confessions) >= self.total_confessions_to_choose_from:
-            if not self.ensure_gemini_processor():
-                print("Gemini setup failed and there are no manual override posts to continue with.")
-                return
-            else:
-                ai_candidates = regular_confessions[-self.total_confessions_to_choose_from:]
-                print(f"Processing {len(ai_candidates)} confessions for moderation.")
-
-                ai_selected_posts = self.moderate_confessions(ai_candidates)
-
-                if ai_selected_posts:
-                    print(
-                        f"Selecting top {self.max_confession_per_run} confessions "
-                        "based on creativity and potential reach..."
-                    )
-                    ai_selected_posts = self.gemini_processor.select_top_confessions(
-                        ai_selected_posts,
-                        max_count=self.max_confession_per_run
-                    )
-                    print(f"Selected {len(ai_selected_posts)} top confessions for posting.")
-                else:
-                    print("No safe AI-reviewed confessions found for posting.")
-            shortlisted_posts = ai_selected_posts
-        elif regular_confessions:
+            prioritized_force_posts = force_post_confessions[:remaining_slots]
             print(
-                f"Found only {len(regular_confessions)} regular confession(s). "
-                f"Need at least {self.total_confessions_to_choose_from} for AI shortlisting, "
-                "so leaving them untouched for a later run."
+                f"Found {len(force_post_confessions)} manual override confession(s). "
+                f"Posting up to {len(prioritized_force_posts)} of them first this run."
             )
-            shortlisted_posts = []
-        else:
-            shortlisted_posts = []
+            self.prepare_force_posts(prioritized_force_posts)
+            shortlisted_posts.extend(prioritized_force_posts)
+            remaining_slots -= len(prioritized_force_posts)
+
+        if remaining_slots > 0 and regular_confessions:
+            if len(regular_confessions) >= self.total_confessions_to_choose_from:
+                if not self.ensure_gemini_processor():
+                    if shortlisted_posts:
+                        print(
+                            "Gemini setup failed while manual override posts are present, "
+                            "so only the override rows will be posted."
+                        )
+                    else:
+                        print("Gemini setup failed and there are no manual override posts to continue with.")
+                        return
+                else:
+                    ai_candidates = regular_confessions[-self.total_confessions_to_choose_from:]
+                    print(
+                        f"Processing {len(ai_candidates)} regular confession(s) to fill "
+                        f"{remaining_slots} remaining post slot(s)."
+                    )
+
+                    ai_selected_posts = self.moderate_confessions(ai_candidates)
+
+                    if ai_selected_posts:
+                        print(
+                            f"Selecting top {remaining_slots} confession(s) "
+                            "based on creativity and potential reach..."
+                        )
+                        ai_selected_posts = self.gemini_processor.select_top_confessions(
+                            ai_selected_posts,
+                            max_count=remaining_slots
+                        )
+                        print(f"Selected {len(ai_selected_posts)} AI confession(s) for posting.")
+                        shortlisted_posts.extend(ai_selected_posts)
+                    else:
+                        print("No safe AI-reviewed confessions found for posting.")
+            else:
+                print(
+                    f"Found only {len(regular_confessions)} regular confession(s). "
+                    f"Need at least {self.total_confessions_to_choose_from} for AI shortlisting, "
+                    "so leaving those rows untouched for a later run."
+                )
+
+        shortlisted_posts = shortlisted_posts[:self.max_confession_per_run]
 
         if not shortlisted_posts:
             print("No confessions ready for posting.")
