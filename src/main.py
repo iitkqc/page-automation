@@ -299,18 +299,65 @@ class ConfessionAutomation:
             return f"{angles[0]} or {angles[1]}"
         return f"{angles[0]}, {angles[1]}, or {angles[2]}"
 
-    def build_story_follow_up(self, angle_keys: List[str]) -> str:
-        """Add one extra line so the rejection story feels informative, not flat."""
+    def build_story_detail_lines(self, angle_keys: List[str]) -> List[str]:
+        """Turn rejection angles into fuller public-facing explanation lines."""
+        detail_lines = []
+
+        for angle_key in angle_keys:
+            if angle_key == "serious_allegations":
+                detail_lines.append(
+                    "Some confessions stop feeling like harmless gossip and start sounding like serious real-world accusations."
+                )
+            elif angle_key == "manipulative_dynamics":
+                detail_lines.append(
+                    "Some read less like honest mess and more like emotional games, pressure, or manipulation being normalized."
+                )
+            elif angle_key == "too_revealing":
+                detail_lines.append(
+                    "Some include so many clues that the anonymity starts collapsing, even if no name is written."
+                )
+            elif angle_key == "safety_lines":
+                detail_lines.append(
+                    "Some cross the line from venting into language a public campus page cannot responsibly amplify."
+                )
+            elif angle_key == "too_explicit":
+                detail_lines.append(
+                    "Some are simply too explicit for the tone and boundaries this page has to maintain."
+                )
+            elif angle_key == "too_thin":
+                detail_lines.append(
+                    "Some have a vibe but not enough scene, detail, or emotional texture to really land on feed."
+                )
+            elif angle_key == "not_iitk_enough":
+                detail_lines.append(
+                    "Some never quite feel rooted in IITK life, so they miss the campus-specific pull people come here for."
+                )
+            elif angle_key == "too_niche":
+                detail_lines.append(
+                    "Some are so niche that they do not open up into a wider campus feeling or conversation."
+                )
+            elif angle_key == "advice_post":
+                detail_lines.append(
+                    "Some work better as advice requests than confession-page posts, even if the feeling behind them is real."
+                )
+
+        return detail_lines[:3]
+
+    def build_story_closing_line(self, angle_keys: List[str]) -> str:
+        """Add a strong closing line with guidance for what works on feed."""
         key_set = set(angle_keys)
 
         if key_set & {"serious_allegations", "too_revealing", "safety_lines", "too_explicit"}:
-            return "If it risks unsafe callouts or exposing private details, it stays off the feed."
+            return (
+                "The posts that survive are the ones that stay sharp and real without exposing someone or crossing a safety line."
+            )
         if "manipulative_dynamics" in key_set:
-            return "Messy campus stories can stay. Glorifying manipulation usually will not."
-        if key_set & {"too_thin", "not_iitk_enough", "too_niche", "advice_post"}:
-            return "The strongest posts usually feel specific, campus-rooted, and built around a real moment."
-
-        return "The feed works best when the story is sharp, safe, and recognizably campus-native."
+            return (
+                "Messy honesty belongs here. Romanticizing control, coercion, or emotional games usually does not."
+            )
+        return (
+            "The posts that usually work best feel specific, campus-native, emotionally honest, and still safe to share publicly."
+        )
 
     def build_ai_rejection_story_text(self, ai_candidates: List[Confession]) -> str:
         """Create a concise, audience-friendly story summary for selected rejection angles."""
@@ -354,12 +401,17 @@ class ConfessionAutomation:
         if not combined_angles:
             return ""
 
-        follow_up = self.build_story_follow_up(selected_angle_keys)
-        return (
-            "What quietly gets a confession skipped?\n\n"
-            f"Usually things like {combined_angles}.\n"
-            f"{follow_up}"
-        )
+        detail_lines = self.build_story_detail_lines(selected_angle_keys)
+        closing_line = self.build_story_closing_line(selected_angle_keys)
+
+        story_sections = [
+            "What quietly gets a confession skipped?",
+            f"Usually it starts with things like {combined_angles}.",
+        ]
+        story_sections.extend(detail_lines)
+        story_sections.append(closing_line)
+
+        return "\n\n".join(story_sections)
 
     def post_ai_rejection_summary_story(self, ai_candidates: List[Confession]) -> bool:
         """Best-effort story share summarizing why some AI-reviewed confessions were skipped."""

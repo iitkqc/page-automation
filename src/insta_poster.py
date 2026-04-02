@@ -385,48 +385,88 @@ class InstagramPoster:
             category="campus_life",
         )
         generator = ConfessionImageGenerator(story_confession)
-        story_image_path = ""
+        story_slides = self.split_story_text_into_slides(cleaned_story_text)
+        all_slides_shared = True
 
-        try:
-            story_image_path = generator.create_story_image(
-                cleaned_story_text,
-                footer_text="",
-                max_chars=210,
-                start_size=54,
-            )
-            if not story_image_path:
-                print("Failed to generate summary story image.")
-                return False
+        for index, slide_text in enumerate(story_slides, start=1):
+            story_image_path = ""
 
-            story_url = self.upload_image_to_cloudinary(
-                story_image_path,
-                f"confessions/{public_id_suffix}"
-            )
-            if not story_url:
-                print("Failed to upload summary story image to Cloudinary.")
-                return False
+            try:
+                story_image_path = generator.create_story_image(
+                    slide_text,
+                    footer_text="",
+                    max_chars=380,
+                    start_size=52,
+                    min_size=28,
+                    text_top=250,
+                    bottom_padding=120,
+                )
+                if not story_image_path:
+                    print("Failed to generate summary story image.")
+                    return False
 
-            media_container_id = self.create_instagram_story(story_url)
-            if not media_container_id:
-                return False
+                story_url = self.upload_image_to_cloudinary(
+                    story_image_path,
+                    f"confessions/{public_id_suffix}_slide_{index}"
+                )
+                if not story_url:
+                    print("Failed to upload summary story image to Cloudinary.")
+                    return False
 
-            print("Waiting for Instagram to process summary story media...")
-            time.sleep(10)
-            story_id = self.publish_instagram_post(media_container_id, retry_delays=[5, 10, 15])
-            if story_id:
-                print("Successfully shared summary story to Instagram!")
-                return True
+                media_container_id = self.create_instagram_story(story_url)
+                if not media_container_id:
+                    return False
 
-            return False
-        except Exception as e:
-            print(f"Summary story share failed: {e}")
-            return False
-        finally:
-            if story_image_path:
-                try:
-                    os.remove(story_image_path)
-                except OSError:
-                    pass
+                print(f"Waiting for Instagram to process summary story media {index}/{len(story_slides)}...")
+                time.sleep(10)
+                story_id = self.publish_instagram_post(media_container_id, retry_delays=[5, 10, 15])
+                if not story_id:
+                    all_slides_shared = False
+                    break
+            except Exception as e:
+                print(f"Summary story share failed: {e}")
+                all_slides_shared = False
+                break
+            finally:
+                if story_image_path:
+                    try:
+                        os.remove(story_image_path)
+                    except OSError:
+                        pass
+
+        if all_slides_shared:
+            print("Successfully shared summary story to Instagram!")
+        return all_slides_shared
+
+    def split_story_text_into_slides(self, story_text: str, max_chars_per_slide: int = 330, max_slides: int = 2) -> List[str]:
+        """Split longer review-story text into up to two readable story slides."""
+        paragraphs = [part.strip() for part in story_text.split("\n\n") if part.strip()]
+        if not paragraphs:
+            return []
+
+        slides = []
+        current_slide = ""
+
+        for paragraph in paragraphs:
+            candidate = f"{current_slide}\n\n{paragraph}".strip() if current_slide else paragraph
+            if len(candidate) <= max_chars_per_slide:
+                current_slide = candidate
+                continue
+
+            if current_slide:
+                slides.append(current_slide)
+                current_slide = paragraph
+            else:
+                slides.append(paragraph[:max_chars_per_slide].rsplit(" ", 1)[0].strip() or paragraph[:max_chars_per_slide])
+                current_slide = paragraph[len(slides[-1]):].strip()
+
+            if len(slides) >= max_slides:
+                break
+
+        if current_slide and len(slides) < max_slides:
+            slides.append(current_slide)
+
+        return slides[:max_slides]
 
     def schedule_instagram_post(self, confession: Confession) -> bool:
         """Main function to process confession and post to Instagram"""

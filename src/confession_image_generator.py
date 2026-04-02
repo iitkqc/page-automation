@@ -676,6 +676,9 @@ class ConfessionImageGenerator:
         footer_text: str = "Full confession on feed",
         max_chars: int = 240,
         start_size: int = 64,
+        min_size: int = 36,
+        text_top: int = 330,
+        bottom_padding: int = 180,
     ) -> str:
         story_width = 1080
         story_height = 1920
@@ -685,7 +688,7 @@ class ConfessionImageGenerator:
         story_text = self.truncate_text((text or self.build_story_share_text()).strip(), max_chars)
         helper_font = self.load_font(30)
         has_footer = bool((footer_text or "").strip())
-        text_bottom = story_height - 270 if has_footer else story_height - 180
+        text_bottom = story_height - 270 if has_footer else story_height - bottom_padding
         self.draw_monochrome_header(
             draw,
             story_width,
@@ -697,9 +700,9 @@ class ConfessionImageGenerator:
         self.draw_centered_text_block(
             draw,
             story_text,
-            bounds=(110, 330, story_width - 110, text_bottom),
+            bounds=(110, text_top, story_width - 110, text_bottom),
             start_size=start_size,
-            min_size=36,
+            min_size=min_size,
             line_height_factor=1.2,
             fill=MONOCHROME_COLORS["text"],
         )
