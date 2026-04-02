@@ -124,9 +124,25 @@ class GoogleFormReader:
             token_col_index=token_col_index,
         )
 
+    def _build_confession(self, row: list[str], row_num: int, force_post: bool) -> Confession:
+        return Confession(
+            timestamp=row[0],
+            row_num=row_num,
+            text=row[1],
+            summary_caption=None,
+            sentiment=None,
+            category=None,
+            sigma_reply=None,
+            pinned_comments=None,
+            force_post=force_post,
+        )
+
     def get_latest_confessions_from_sheet(self) -> List[Confession]:
         """
-        Retrieves confessions from a Google Sheet, filtering out already processed ones.
+        Retrieves confessions from a Google Sheet.
+        Manual override rows (`Post = 1`) are picked up from anywhere in the sheet
+        as long as their status is still blank. Regular rows still come from the
+        newest trailing block of blank-status entries.
         """
         try:
             worksheet = self._get_worksheet()
@@ -144,14 +160,14 @@ class GoogleFormReader:
                 2,
             )
             data_rows = all_records[1:]
+            manual_confessions = []
+            manual_row_numbers = set()
 
-            filtered_confessions = []
-            for reverse_index, row in enumerate(reversed(data_rows), start=1):
+            for row_offset, row in enumerate(data_rows, start=2):
                 padded_row = row + [""] * max(0, required_columns - len(row))
                 status_value = padded_row[layout.status_col_index - 1].strip()
-
                 if status_value != "":
-                    break
+                    continue
 
                 force_post = False
                 if layout.manual_post_col_index:
@@ -159,18 +175,29 @@ class GoogleFormReader:
                         padded_row[layout.manual_post_col_index - 1].strip() == "1"
                     )
 
-                confession = Confession(
-                    timestamp=padded_row[0],
-                    row_num=total_rows - reverse_index + 1,
-                    text=padded_row[1],
-                    summary_caption=None,
-                    sentiment=None,
-                    category=None,
-                    sigma_reply=None,
-                    pinned_comments=None,
-                    force_post=force_post,
+                if not force_post:
+                    continue
+
+                manual_confessions.append(
+                    self._build_confession(padded_row, row_offset, force_post=True)
                 )
-                filtered_confessions.append(confession)
+                manual_row_numbers.add(row_offset)
+
+            filtered_confessions = list(manual_confessions)
+            for reverse_index, row in enumerate(reversed(data_rows), start=1):
+                row_num = total_rows - reverse_index + 1
+                padded_row = row + [""] * max(0, required_columns - len(row))
+                status_value = padded_row[layout.status_col_index - 1].strip()
+
+                if status_value != "":
+                    break
+
+                if row_num in manual_row_numbers:
+                    continue
+
+                filtered_confessions.append(
+                    self._build_confession(padded_row, row_num, force_post=False)
+                )
 
             return filtered_confessions
 
