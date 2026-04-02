@@ -70,16 +70,32 @@ class GeminiProcessor:
         2. empathetic_pinned_comment
         3. discussion_pinned_comment
 
-        Also provide a short story-ready rejection reason for every confession you do not select.
-        Rejection-reason rules:
+        Also provide 2 rejection outputs for every confession you do not select:
+        1. a short operational rejection reason
+        2. a deeper public-facing story review reason that could be shown on Story
+
+        Operational rejection-reason rules:
         - keep each reason to 8 to 16 words
         - write it as one polished sentence in natural English
         - keep it indirect and public-facing
         - never quote, paraphrase, or reveal submission details
-        - whenever relevant, anchor the reason in broad page-level angles like serious allegations, manipulative dynamics, safety-line issues, or details too revealing for a public page
-        - otherwise use broad quality angles like weak specificity, repetitive vibe, low emotional depth, too niche, too advice-driven, or not campus-native enough
         - avoid generic filler like "not selected this time" or "didn't make the cut"
         - return an empty string for selected confessions
+
+        Story review reason rules:
+        - write 2 to 4 full sentences as one clean paragraph that can be pasted directly onto an Instagram Story card
+        - keep it fully based on the confession you just reviewed
+        - explain indirectly what made it miss the feed
+        - never quote, paraphrase, or reveal submission details
+        - make it feel reflective, sharp, and specific, not generic moderation boilerplate
+        - avoid generic openers like "some confessions" or "this confession"
+        - make the takeaway feel readable to an audience without any extra rewriting
+        - if the rejection does not create an interesting audience-facing takeaway, return an empty string
+        - return an empty string for selected confessions
+
+        Helpful directions:
+        - whenever relevant, anchor the story review reason in broad page-level ideas like serious allegations, manipulative dynamics, safety-line issues, details too revealing for a public page, weak specificity, repetitive vibe, low emotional depth, too niche, too advice-driven, or not campus-native enough
+        - write like a smart page admin explaining the miss without sounding robotic
 
         These pinned comments must feel more engaging than generic filler.
 
@@ -117,6 +133,7 @@ class GeminiProcessor:
         - "empathetic_pinned_comments": same length as indices
         - "discussion_pinned_comments": same length as indices
         - "rejection_reasons": same length as the full confession list, with empty strings for selected confessions
+        - "rejection_story_reasons": same length as the full confession list, with empty strings for selected confessions
         """
 
         config = GenerateContentConfig(
@@ -148,6 +165,7 @@ class GeminiProcessor:
                 "discussion_bait": result.discussion_pinned_comments[position] if position < len(result.discussion_pinned_comments) else "",
             }
             confession.rejection_reason = ""
+            confession.story_review_reason = ""
             selected_confessions.append(confession)
 
         for position, confession in enumerate(confessions):
@@ -159,6 +177,11 @@ class GeminiProcessor:
                 else ""
             )
             confession.rejection_reason = reason or "It was not a strong enough fit for the feed this time."
+            confession.story_review_reason = (
+                result.rejection_story_reasons[position].strip()
+                if position < len(result.rejection_story_reasons)
+                else ""
+            )
 
         return selected_confessions
 
@@ -210,7 +233,10 @@ class GeminiProcessor:
         Confession Text:
         "{confession_text}"
 
-        If the confession is not safe, make "rejection_reason" a short public-facing sentence that could be safely echoed in a Story summary.
+        If the confession is not safe, produce both:
+        1. "rejection_reason": a short operational reason
+        2. "story_review_reason": a deeper public-facing explanation that could be shown on Story
+
         Rejection-reason rules:
         - keep it to 8 to 16 words
         - write in natural, grammatically clean English
@@ -219,9 +245,20 @@ class GeminiProcessor:
         - make the issue understandable without revealing specifics
         - whenever relevant, express it as a broad page-level issue like serious allegation, safety concern, manipulative dynamic, or overly revealing detail
 
+        Story review reason rules:
+        - write 2 to 4 full sentences as one clean paragraph that can be pasted directly onto an Instagram Story card
+        - keep it fully based on the confession you just reviewed
+        - explain indirectly what made it unsafe or unsuitable
+        - never quote or restate the confession
+        - make it feel thoughtful and specific, not generic moderation language
+        - avoid generic openers like "some confessions" or "this confession"
+        - make the takeaway readable to an audience without any extra rewriting
+        - if the rejection does not create an interesting audience-facing takeaway, return an empty string
+
         Output a JSON object with:
         - "is_safe": boolean
         - "rejection_reason": short public-facing reason if not safe, otherwise empty string
+        - "story_review_reason": deeper public-facing explanation if useful, otherwise empty string
         - "sentiment": Positive, Negative, Neutral, or Mixed
         - "category": one exact value from the category list above
         - "summary_caption": the creative caption string

@@ -233,6 +233,7 @@ class ConfessionAutomation:
 
             if len(confession.text) < 60:
                 confession.rejection_reason = "It felt too brief and underdeveloped for the feed."
+                confession.story_review_reason = ""
                 print(f"Confession ID {confession.timestamp} is too short to process. Skipping.")
                 continue
             
@@ -251,167 +252,51 @@ class ConfessionAutomation:
                 confession.summary_caption = gemini_result.summary_caption
                 confession.story_share_candidate = gemini_result.story_share_candidate
                 confession.rejection_reason = ""
+                confession.story_review_reason = ""
                 shortlisted_confessions.append(confession)
             else:
                 confession.rejection_reason = (
                     gemini_result.rejection_reason.strip()
                     or "It did not feel safe enough for a public campus feed."
                 )
+                confession.story_review_reason = (gemini_result.story_review_reason or "").strip()
                 print(f"Confession deemed UNSAFE: {gemini_result.rejection_reason}")
 
         print(f"\nFound {len(shortlisted_confessions)} safe confessions.")
         return shortlisted_confessions
 
-    def extract_story_rejection_angle(self, reason: str) -> tuple[str, str, bool] | None:
-        """Map a rejection reason to a short, audience-friendly story angle."""
-        cleaned_reason = " ".join((reason or "").lower().split())
-        if not cleaned_reason:
-            return None
-
-        if any(keyword in cleaned_reason for keyword in ("allegation", "misconduct", "accus", "faculty member", "professor", "prof ")):
-            return ("serious_allegations", "serious allegations", True)
-        if any(keyword in cleaned_reason for keyword in ("manipulative", "coerc", "exploit", "toxic", "unhealthy relationship", "relationship dynamics")):
-            return ("manipulative_dynamics", "manipulative relationship games", True)
-        if any(keyword in cleaned_reason for keyword in ("personal", "private", "identif", "revealing", "doxx")):
-            return ("too_revealing", "details too revealing for a public page", True)
-        if any(keyword in cleaned_reason for keyword in ("harass", "hate", "abuse", "unsafe", "stalk", "threat", "violent", "danger", "harmful language", "negativity")):
-            return ("safety_lines", "language that crosses safety lines", True)
-        if any(keyword in cleaned_reason for keyword in ("sexual", "explicit", "nsfw")):
-            return ("too_explicit", "stuff too explicit for the page", True)
-        if any(keyword in cleaned_reason for keyword in ("short", "brief", "underdeveloped", "generic", "weak", "hook", "specific", "detail", "flat", "repet", "similar", "duplicate")):
-            return ("too_thin", "stories too thin to stand out", False)
-        if any(keyword in cleaned_reason for keyword in ("campus-native", "campus native", "iitk", "broad campus")):
-            return ("not_iitk_enough", "posts that do not feel rooted enough in IITK life", False)
-        if "niche" in cleaned_reason:
-            return ("too_niche", "stories too niche for the wider page", False)
-        if any(keyword in cleaned_reason for keyword in ("advice", "forum")):
-            return ("advice_post", "advice-type posts better suited elsewhere", False)
-
-        return None
-
-    def join_story_angles(self, angles: List[str]) -> str:
-        """Join short story angles into one natural phrase."""
-        if not angles:
+    def normalize_story_review_reason(self, reason: str) -> str:
+        """Normalize AI-written story-review text so it can be pasted directly onto Story slides."""
+        if not reason:
             return ""
-        if len(angles) == 1:
-            return angles[0]
-        if len(angles) == 2:
-            return f"{angles[0]} or {angles[1]}"
-        return f"{angles[0]}, {angles[1]}, or {angles[2]}"
 
-    def build_story_detail_lines(self, angle_keys: List[str]) -> List[str]:
-        """Turn rejection angles into fuller public-facing explanation lines."""
-        detail_lines = []
-
-        for angle_key in angle_keys:
-            if angle_key == "serious_allegations":
-                detail_lines.append(
-                    "Some confessions stop feeling like harmless gossip and start sounding like serious real-world accusations."
-                )
-            elif angle_key == "manipulative_dynamics":
-                detail_lines.append(
-                    "Some read less like honest mess and more like emotional games, pressure, or manipulation being normalized."
-                )
-            elif angle_key == "too_revealing":
-                detail_lines.append(
-                    "Some include so many clues that the anonymity starts collapsing, even if no name is written."
-                )
-            elif angle_key == "safety_lines":
-                detail_lines.append(
-                    "Some cross the line from venting into language a public campus page cannot responsibly amplify."
-                )
-            elif angle_key == "too_explicit":
-                detail_lines.append(
-                    "Some are simply too explicit for the tone and boundaries this page has to maintain."
-                )
-            elif angle_key == "too_thin":
-                detail_lines.append(
-                    "Some have a vibe but not enough scene, detail, or emotional texture to really land on feed."
-                )
-            elif angle_key == "not_iitk_enough":
-                detail_lines.append(
-                    "Some never quite feel rooted in IITK life, so they miss the campus-specific pull people come here for."
-                )
-            elif angle_key == "too_niche":
-                detail_lines.append(
-                    "Some are so niche that they do not open up into a wider campus feeling or conversation."
-                )
-            elif angle_key == "advice_post":
-                detail_lines.append(
-                    "Some work better as advice requests than confession-page posts, even if the feeling behind them is real."
-                )
-
-        return detail_lines[:3]
-
-    def build_story_closing_line(self, angle_keys: List[str]) -> str:
-        """Add a strong closing line with guidance for what works on feed."""
-        key_set = set(angle_keys)
-
-        if key_set & {"serious_allegations", "too_revealing", "safety_lines", "too_explicit"}:
-            return (
-                "The posts that survive are the ones that stay sharp and real without exposing someone or crossing a safety line."
-            )
-        if "manipulative_dynamics" in key_set:
-            return (
-                "Messy honesty belongs here. Romanticizing control, coercion, or emotional games usually does not."
-            )
-        return (
-            "The posts that usually work best feel specific, campus-native, emotionally honest, and still safe to share publicly."
-        )
+        cleaned = " ".join(reason.replace("\r", " ").split())
+        cleaned = cleaned.replace(" .", ".").replace(" ,", ",")
+        return cleaned.strip()
 
     def build_ai_rejection_story_text(self, ai_candidates: List[Confession]) -> str:
-        """Create a concise, audience-friendly story summary for selected rejection angles."""
-        rejected_reasons = [
-            confession.rejection_reason
+        """Build the rejection story directly from AI-generated review notes."""
+        story_review_reasons = [
+            self.normalize_story_review_reason(confession.story_review_reason or "")
             for confession in ai_candidates
-            if (confession.rejection_reason or "").strip()
+            if self.normalize_story_review_reason(confession.story_review_reason or "")
         ]
-        if len(rejected_reasons) < 2:
+        if len(story_review_reasons) < 2:
             return ""
 
-        engaging_angles = []
-        fallback_angles = []
-        seen_keys = set()
-
-        for reason in rejected_reasons:
-            angle = self.extract_story_rejection_angle(reason or "")
-            if not angle:
+        unique_reasons = []
+        seen_reasons = set()
+        for reason in story_review_reasons:
+            dedupe_key = reason.lower()
+            if dedupe_key in seen_reasons:
                 continue
+            seen_reasons.add(dedupe_key)
+            unique_reasons.append(reason)
 
-            angle_key, angle_text, is_engaging = angle
-            if angle_key in seen_keys:
-                continue
-
-            seen_keys.add(angle_key)
-            if is_engaging:
-                engaging_angles.append((angle_key, angle_text))
-            else:
-                fallback_angles.append((angle_key, angle_text))
-
-        if not engaging_angles:
+        if len(unique_reasons) < 2:
             return ""
 
-        selected_angle_items = engaging_angles[:2]
-        if len(selected_angle_items) < 2 and fallback_angles:
-            selected_angle_items.append(fallback_angles[0])
-
-        selected_angle_texts = [angle_text for _, angle_text in selected_angle_items[:2]]
-        selected_angle_keys = [angle_key for angle_key, _ in selected_angle_items[:2]]
-        combined_angles = self.join_story_angles(selected_angle_texts)
-        if not combined_angles:
-            return ""
-
-        detail_lines = self.build_story_detail_lines(selected_angle_keys)
-        closing_line = self.build_story_closing_line(selected_angle_keys)
-
-        story_sections = [
-            "What quietly gets a confession skipped?",
-            f"Usually it starts with things like {combined_angles}.",
-        ]
-        story_sections.extend(detail_lines)
-        story_sections.append(closing_line)
-
-        return "\n\n".join(story_sections)
+        return "\n\n".join(unique_reasons[:2])
 
     def post_ai_rejection_summary_story(self, ai_candidates: List[Confession]) -> bool:
         """Best-effort story share summarizing why some AI-reviewed confessions were skipped."""
