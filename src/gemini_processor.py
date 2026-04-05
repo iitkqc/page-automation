@@ -87,15 +87,18 @@ class GeminiProcessor:
         - keep it fully based on the confession you just reviewed
         - explain indirectly what made it miss the feed
         - never quote, paraphrase, or reveal submission details
-        - make it feel reflective, sharp, and specific, not generic moderation boilerplate
+        - make it feel serious, calm, and credible, not dramatic, slogan-heavy, or spammy
+        - make it reflective, sharp, and specific, not generic moderation boilerplate
         - avoid generic openers like "some confessions" or "this confession"
         - make the takeaway feel readable to an audience without any extra rewriting
+        - do not use exclamation marks, rhetorical questions, engagement bait, hashtags, emojis, or calls to action
+        - avoid awareness-campaign language like "let's talk about this" or "we need to do better"
         - if the rejection does not create an interesting audience-facing takeaway, return an empty string
         - return an empty string for selected confessions
 
         Helpful directions:
         - whenever relevant, anchor the story review reason in broad page-level ideas like serious allegations, manipulative dynamics, safety-line issues, details too revealing for a public page, weak specificity, repetitive vibe, low emotional depth, too niche, too advice-driven, or not campus-native enough
-        - write like a smart page admin explaining the miss without sounding robotic
+        - write like a thoughtful page admin explaining the miss without sounding robotic or preachy
 
         These pinned comments must feel more engaging than generic filler.
 
@@ -229,6 +232,7 @@ class GeminiProcessor:
         - set "story_share_candidate" to true only when the confession carries a clear social message, cautionary takeaway, mental-health resonance, harassment/safety signal, or a campus-wide conversation worth amplifying
         - keep it false for regular entertaining confessions, romance, casual nostalgia, light humor, or niche personal stories
         - be conservative; only mark true when a Story reshare would genuinely add value
+        - think of Story as a sober public-interest reshare, not a growth hook or teaser
 
         Confession Text:
         "{confession_text}"
@@ -250,9 +254,12 @@ class GeminiProcessor:
         - keep it fully based on the confession you just reviewed
         - explain indirectly what made it unsafe or unsuitable
         - never quote or restate the confession
+        - make it feel serious, calm, and credible, not dramatic, slogan-heavy, or spammy
         - make it feel thoughtful and specific, not generic moderation language
         - avoid generic openers like "some confessions" or "this confession"
         - make the takeaway readable to an audience without any extra rewriting
+        - do not use exclamation marks, rhetorical questions, engagement bait, hashtags, emojis, or calls to action
+        - avoid awareness-campaign language like "let's talk about this" or "we need to do better"
         - if the rejection does not create an interesting audience-facing takeaway, return an empty string
 
         Output a JSON object with:
@@ -372,6 +379,7 @@ class GeminiProcessor:
         - set "story_share_candidate" to true only when the confession carries a clear social message, cautionary takeaway, mental-health resonance, harassment/safety signal, or a campus-wide conversation worth amplifying
         - keep it false for regular entertaining confessions, romance, casual nostalgia, light humor, or niche personal stories
         - be conservative
+        - think of Story as a sober public-interest reshare, not a growth hook or teaser
 
         Confession Text:
         "{confession_text}"

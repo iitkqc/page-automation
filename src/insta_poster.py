@@ -13,6 +13,8 @@ from reel_generator import FfmpegReelGenerator
 # --- Configuration ---
 FB_GRAPH_API_BASE = "https://graph.instagram.com/v21.0"
 INSTAGRAM_PAGE_ID = os.getenv("INSTAGRAM_PAGE_ID")
+MAX_CONFESSION_STORY_SHARES_PER_RUN = 1
+MAX_SUMMARY_STORY_SLIDES = 1
 
 # Cloudinary configuration
 cloudinary.config(
@@ -28,6 +30,7 @@ class InstagramPoster:
         self.fb_graph_api_base = FB_GRAPH_API_BASE
         self.instagram_page_id = INSTAGRAM_PAGE_ID
         self.access_token = os.getenv("INSTAGRAM_ACCESS_TOKEN")
+        self.confession_story_shares_posted = 0
         
         # if not self.access_token:
         #     print("Warning: INSTAGRAM_ACCESS_TOKEN not set.")
@@ -335,6 +338,12 @@ class InstagramPoster:
         """Best-effort story share for confessions flagged as socially resonant."""
         if not confession.story_share_candidate:
             return
+        if self.confession_story_shares_posted >= MAX_CONFESSION_STORY_SHARES_PER_RUN:
+            print(
+                f"Skipping story share for confession {confession.timestamp} because the per-run "
+                "story limit has already been reached."
+            )
+            return
 
         print(f"Confession {confession.timestamp} flagged for story share. Creating story...")
         story_image_path = ""
@@ -361,6 +370,7 @@ class InstagramPoster:
             time.sleep(10)
             story_id = self.publish_instagram_post(media_container_id, retry_delays=[5, 10, 15])
             if story_id:
+                self.confession_story_shares_posted += 1
                 print(f"Successfully shared confession {confession.timestamp} to Instagram Story!")
         except Exception as e:
             print(f"Story share failed for confession {confession.timestamp}: {e}")
@@ -385,7 +395,10 @@ class InstagramPoster:
             category="campus_life",
         )
         generator = ConfessionImageGenerator(story_confession)
-        story_slides = self.split_story_text_into_slides(cleaned_story_text)
+        story_slides = self.split_story_text_into_slides(
+            cleaned_story_text,
+            max_slides=MAX_SUMMARY_STORY_SLIDES,
+        )
         all_slides_shared = True
 
         for index, slide_text in enumerate(story_slides, start=1):
@@ -438,8 +451,8 @@ class InstagramPoster:
             print("Successfully shared summary story to Instagram!")
         return all_slides_shared
 
-    def split_story_text_into_slides(self, story_text: str, max_chars_per_slide: int = 330, max_slides: int = 2) -> List[str]:
-        """Split longer review-story text into up to two readable story slides."""
+    def split_story_text_into_slides(self, story_text: str, max_chars_per_slide: int = 330, max_slides: int = 1) -> List[str]:
+        """Split longer review-story text into a small number of readable story slides."""
         paragraphs = [part.strip() for part in story_text.split("\n\n") if part.strip()]
         if not paragraphs:
             return []

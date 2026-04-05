@@ -160,11 +160,9 @@ class ConfessionAutomation:
                 )
 
         shortlisted_posts = shortlisted_posts[:self.max_confession_per_run]
-        ai_rejection_story_posted = False
-
         if not shortlisted_posts:
             if ai_candidates:
-                ai_rejection_story_posted = self.post_ai_rejection_summary_story(ai_candidates)
+                self.post_ai_rejection_summary_story(ai_candidates)
             print("No confessions ready for posting.")
             self.instagram_poster.delete_all_assets()
             return
@@ -183,9 +181,6 @@ class ConfessionAutomation:
                 print(f"Marked row {row} as NOT POSTED (rejected during selection) in Google Sheet.")
         else:
             print("No posts were attempted. System may have failed. Not marking confessions as processed.")
-
-        if ai_candidates and not ai_rejection_story_posted:
-            self.post_ai_rejection_summary_story(ai_candidates)
 
         # Cleanup
         self.instagram_poster.delete_all_assets()

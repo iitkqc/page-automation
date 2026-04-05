@@ -673,7 +673,7 @@ class ConfessionImageGenerator:
     def create_story_image(
         self,
         text: str | None = None,
-        footer_text: str = "Full confession on feed",
+        footer_text: str = "Full context is available on the feed.",
         max_chars: int = 240,
         start_size: int = 64,
         min_size: int = 36,
