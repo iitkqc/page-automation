@@ -2,8 +2,9 @@ name: Confession Instagram Automator
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
-    
+    - cron: '30 3 * * *'
+    - cron: '30 7 * * *'
+    - cron: '30 11 * * *'
   workflow_dispatch:
 
 jobs:
@@ -50,4 +51,3 @@ jobs:
       run: |
         rm -rf generated_images
         rm -f google_sheets_credentials.json
-
