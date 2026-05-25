@@ -33,6 +33,7 @@ jobs:
 
     - name: Run confession automator
       env:
+        PYTHONUNBUFFERED: "1"
         GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         GOOGLE_SHEET_URL: ${{ secrets.GOOGLE_SHEET_URL }}
         GOOGLE_SHEETS_CREDENTIALS_FILE: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_FILE }}
