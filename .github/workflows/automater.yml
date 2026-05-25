@@ -47,7 +47,7 @@ jobs:
         MODERATION_MODEL: ${{ secrets.MODERATION_MODEL }}
         SHORTLISTING_MODEL: ${{ secrets.SHORTLISTING_MODEL }}
         NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-        MODEL_NAME: "deepseek-ai/deepseek-v4-pro"
+        MODEL_NAME: "google/gemma-3n-e4b-it"
       run: uv run python src/main.py
 
     - name: Cleanup generated_images and credentials
