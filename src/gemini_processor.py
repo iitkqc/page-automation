@@ -11,7 +11,7 @@ from model import (
     ModerationResponse,
 )
 
-class NvidiaProcessor:
+class GeminiProcessor:
     def __init__(self):
         """Initialize the OpenAI client configured for NVIDIA's API."""
         self.api_key = os.getenv("NVIDIA_API_KEY")
@@ -394,7 +394,7 @@ if __name__ == "__main__":
 
     load_dotenv()
 
-    processor = NvidiaProcessor()
+    processor = GeminiProcessor()
     test_confession = (
         "I just saw a confession of a girl telling about some bra-chor. "
         "It reminded me that mere bhi kuchh kachhe chori hue hai please lauta dena."
