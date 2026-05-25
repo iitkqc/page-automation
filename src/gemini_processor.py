@@ -18,20 +18,15 @@ class GeminiProcessor:
         if not self.api_key:
             raise ValueError("NVIDIA_API_KEY environment variable not set.")
         
-        # Point the standard OpenAI client to NVIDIA's base URL
         self.client = OpenAI(
             base_url="https://integrate.api.nvidia.com/v1",
             api_key=self.api_key
         )
         
-        # Using the Gemma model from your snippet
-        self.model = os.getenv("MODEL_NAME", "google/gemma-4-31b-it")
+        # Switched to the DeepSeek model
+        self.model = os.getenv("MODEL_NAME", "deepseek-ai/deepseek-v4-pro")
 
     def select_top_confessions(self, confessions: List[Confession], max_count=4) -> List[Confession]:
-        """
-        Uses NVIDIA NIM to select the top confessions based on creativity and potential reach.
-        Returns a list of the selected confessions.
-        """
         confessions_text = "\n\n".join(
             [
                 f"Confession {index + 1}:\n{conf.text}\nSentiment: {conf.sentiment}\nCategory: {get_category_display_name(conf.category)}"
@@ -150,6 +145,9 @@ class GeminiProcessor:
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0.7,
+            top_p=0.95,
+            # Added DeepSeek specific parameters to disable internal thinking tokens
+            extra_body={"chat_template_kwargs": {"thinking": False}},
         )
 
         raw_json = response.choices[0].message.content
@@ -192,9 +190,6 @@ class GeminiProcessor:
         return selected_confessions
 
     def moderate_and_shortlist_confession(self, confession_text: str) -> ModerationResponse:
-        """
-        Uses NVIDIA NIM to moderate for hate speech and determine suitability.
-        """
         category_options = ", ".join(IITK_CONTENT_CATEGORIES)
         prompt = f"""
         Analyze the following confession text for hate speech, harassment, sexually explicit content, and dangerous content.
@@ -278,7 +273,9 @@ class GeminiProcessor:
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            temperature=0.2, 
+            temperature=0.2, # Keeping low temperature for classification
+            top_p=0.95,
+            extra_body={"chat_template_kwargs": {"thinking": False}},
         )
 
         raw_json = response.choices[0].message.content
@@ -287,9 +284,6 @@ class GeminiProcessor:
         return result
 
     def enrich_manual_post(self, confession_text: str) -> ManualPostEnhancementResponse:
-        """
-        Generates caption/comment metadata for a manual override post without moderation gating.
-        """
         category_options = ", ".join(IITK_CONTENT_CATEGORIES)
         prompt = f"""
         You are helping prepare a manually approved IIT Kanpur confession post.
@@ -381,6 +375,8 @@ class GeminiProcessor:
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0.7,
+            top_p=0.95,
+            extra_body={"chat_template_kwargs": {"thinking": False}},
         )
 
         raw_json = response.choices[0].message.content
@@ -394,14 +390,10 @@ if __name__ == "__main__":
 
     load_dotenv()
 
-    processor = GeminiProcessor()
+    processor = NvidiaProcessor()
     test_confession = (
         "I just saw a confession of a girl telling about some bra-chor. "
         "It reminded me that mere bhi kuchh kachhe chori hue hai please lauta dena."
     )
     result = processor.moderate_and_shortlist_confession(test_confession)
     print(result)
-
-    test_hate_speech = "I hate all people from [group] they should all [hate speech]"
-    result_hate = processor.moderate_and_shortlist_confession(test_hate_speech)
-    print(result_hate)
