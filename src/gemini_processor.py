@@ -1,8 +1,7 @@
 import os
+import json
 from typing import List
-
-from google import genai
-from google.genai.types import GenerateContentConfig, HarmBlockThreshold, HarmCategory, SafetySetting
+from openai import OpenAI
 
 from content_taxonomy import IITK_CONTENT_CATEGORIES, get_category_display_name, normalize_category
 from model import (
@@ -12,18 +11,25 @@ from model import (
     ModerationResponse,
 )
 
-
-class GeminiProcessor:
+class NvidiaProcessor:
     def __init__(self):
-        """Initialize the Gemini API client."""
-        self.api_key = os.getenv("GOOGLE_API_KEY")
+        """Initialize the OpenAI client configured for NVIDIA's API."""
+        self.api_key = os.getenv("NVIDIA_API_KEY")
         if not self.api_key:
-            raise ValueError("GOOGLE_API_KEY environment variable not set.")
-        self.client = genai.Client(api_key=self.api_key)
+            raise ValueError("NVIDIA_API_KEY environment variable not set.")
+        
+        # Point the standard OpenAI client to NVIDIA's base URL
+        self.client = OpenAI(
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=self.api_key
+        )
+        
+        # Using the Gemma model from your snippet
+        self.model = os.getenv("MODEL_NAME", "google/gemma-4-31b-it")
 
     def select_top_confessions(self, confessions: List[Confession], max_count=4) -> List[Confession]:
         """
-        Uses Gemini to select the top confessions based on creativity and potential reach.
+        Uses NVIDIA NIM to select the top confessions based on creativity and potential reach.
         Returns a list of the selected confessions.
         """
         confessions_text = "\n\n".join(
@@ -129,28 +135,25 @@ class GeminiProcessor:
         - no repeated wording across the 3 comment options
         - each one should feel like a distinct comment worth actually pinning
 
-        Return your response as JSON with:
-        - "indices": 1-based selected confession indices
-        - "admin_replies": same length as indices, with empty strings when no reply is needed
-        - "funny_pinned_comments": same length as indices
-        - "empathetic_pinned_comments": same length as indices
-        - "discussion_pinned_comments": same length as indices
-        - "rejection_reasons": same length as the full confession list, with empty strings for selected confessions
-        - "rejection_story_reasons": same length as the full confession list, with empty strings for selected confessions
+        Return your response strictly as a JSON object with:
+        - "indices": list of 1-based selected confession indices
+        - "admin_replies": list of strings (same length as indices, with empty strings when no reply is needed)
+        - "funny_pinned_comments": list of strings (same length as indices)
+        - "empathetic_pinned_comments": list of strings (same length as indices)
+        - "discussion_pinned_comments": list of strings (same length as indices)
+        - "rejection_reasons": list of strings (same length as the full confession list, empty strings for selected)
+        - "rejection_story_reasons": list of strings (same length as the full confession list, empty strings for selected)
         """
 
-        config = GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=ConfessionSelectionResponse,
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.7,
         )
 
-        response = self.client.models.generate_content(
-            model=os.getenv("SHORTLISTING_MODEL"),
-            contents=prompt,
-            config=config,
-        )
-
-        result: ConfessionSelectionResponse = response.parsed
+        raw_json = response.choices[0].message.content
+        result = ConfessionSelectionResponse(**json.loads(raw_json))
 
         selected_confessions = []
         seen_indices = set()
@@ -190,8 +193,7 @@ class GeminiProcessor:
 
     def moderate_and_shortlist_confession(self, confession_text: str) -> ModerationResponse:
         """
-        Uses Gemini to moderate for hate speech and determine suitability.
-        Returns a ModerationResponse dataclass with is_safe, rejection_reason, sentiment, and summary_caption.
+        Uses NVIDIA NIM to moderate for hate speech and determine suitability.
         """
         category_options = ", ".join(IITK_CONTENT_CATEGORIES)
         prompt = f"""
@@ -262,46 +264,25 @@ class GeminiProcessor:
         - avoid awareness-campaign language like "let's talk about this" or "we need to do better"
         - if the rejection does not create an interesting audience-facing takeaway, return an empty string
 
-        Output a JSON object with:
+        Output strictly a JSON object with:
         - "is_safe": boolean
-        - "rejection_reason": short public-facing reason if not safe, otherwise empty string
-        - "story_review_reason": deeper public-facing explanation if useful, otherwise empty string
-        - "sentiment": Positive, Negative, Neutral, or Mixed
-        - "category": one exact value from the category list above
-        - "summary_caption": the creative caption string
+        - "rejection_reason": string (short public-facing reason if not safe, otherwise empty string)
+        - "story_review_reason": string (deeper public-facing explanation if useful, otherwise empty string)
+        - "sentiment": string (Positive, Negative, Neutral, or Mixed)
+        - "category": string (one exact value from the category list above)
+        - "summary_caption": string (the creative caption)
         - "story_share_candidate": boolean
         """
 
-        config = GenerateContentConfig(
-            safety_settings=[
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-                    threshold=HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                    threshold=HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                    threshold=HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    threshold=HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-                ),
-            ],
-            response_mime_type="application/json",
-            response_schema=ModerationResponse,
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.2, 
         )
 
-        response = self.client.models.generate_content(
-            model=os.getenv("MODERATION_MODEL"),
-            contents=prompt,
-            config=config,
-        )
-
-        result: ModerationResponse = response.parsed
+        raw_json = response.choices[0].message.content
+        result = ModerationResponse(**json.loads(raw_json))
         result.category = normalize_category(result.category)
         return result
 
@@ -384,30 +365,26 @@ class GeminiProcessor:
         Confession Text:
         "{confession_text}"
 
-        Output a JSON object with:
-        - "sentiment": Positive, Negative, Neutral, or Mixed
-        - "category": one exact value from the category list above
-        - "summary_caption": the creative caption string
-        - "admin_reply": admin reply string, or empty string
-        - "funny_pinned_comment": comment string, or empty string
-        - "empathetic_pinned_comment": comment string, or empty string
-        - "discussion_pinned_comment": comment string, or empty string
+        Output strictly a JSON object with:
+        - "sentiment": string (Positive, Negative, Neutral, or Mixed)
+        - "category": string
+        - "summary_caption": string
+        - "admin_reply": string (admin reply, or empty string)
+        - "funny_pinned_comment": string (comment string, or empty string)
+        - "empathetic_pinned_comment": string (comment string, or empty string)
+        - "discussion_pinned_comment": string (comment string, or empty string)
         - "story_share_candidate": boolean
         """
 
-        config = GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=ManualPostEnhancementResponse,
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.7,
         )
 
-        model_name = os.getenv("SHORTLISTING_MODEL") or os.getenv("MODERATION_MODEL")
-        response = self.client.models.generate_content(
-            model=model_name,
-            contents=prompt,
-            config=config,
-        )
-
-        result: ManualPostEnhancementResponse = response.parsed
+        raw_json = response.choices[0].message.content
+        result = ManualPostEnhancementResponse(**json.loads(raw_json))
         result.category = normalize_category(result.category)
         return result
 
@@ -417,7 +394,7 @@ if __name__ == "__main__":
 
     load_dotenv()
 
-    processor = GeminiProcessor()
+    processor = NvidiaProcessor()
     test_confession = (
         "I just saw a confession of a girl telling about some bra-chor. "
         "It reminded me that mere bhi kuchh kachhe chori hue hai please lauta dena."
