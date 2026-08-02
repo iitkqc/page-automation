@@ -23,8 +23,8 @@ class GeminiProcessor:
             api_key=self.api_key
         )
         
-        # Switched to the DeepSeek model
-        self.model = os.getenv("MODEL_NAME", "deepseek-ai/deepseek-v4-pro")
+        # Updated to the new Gemma 4 model
+        self.model = os.getenv("MODEL_NAME", "google/gemma-4-31b-it")
 
     def select_top_confessions(self, confessions: List[Confession], max_count=4) -> List[Confession]:
         confessions_text = "\n\n".join(
@@ -146,8 +146,6 @@ class GeminiProcessor:
             response_format={"type": "json_object"},
             temperature=0.7,
             top_p=0.95,
-            # Added DeepSeek specific parameters to disable internal thinking tokens
-            extra_body={"chat_template_kwargs": {"thinking": False}},
         )
 
         raw_json = response.choices[0].message.content
@@ -275,7 +273,6 @@ class GeminiProcessor:
             response_format={"type": "json_object"},
             temperature=0.2, # Keeping low temperature for classification
             top_p=0.95,
-            extra_body={"chat_template_kwargs": {"thinking": False}},
         )
 
         raw_json = response.choices[0].message.content
@@ -376,7 +373,6 @@ class GeminiProcessor:
             response_format={"type": "json_object"},
             temperature=0.7,
             top_p=0.95,
-            extra_body={"chat_template_kwargs": {"thinking": False}},
         )
 
         raw_json = response.choices[0].message.content
@@ -390,7 +386,8 @@ if __name__ == "__main__":
 
     load_dotenv()
 
-    processor = NvidiaProcessor()
+    # Fixed: Changed from NvidiaProcessor() to GeminiProcessor() to match class definition
+    processor = GeminiProcessor()
     test_confession = (
         "I just saw a confession of a girl telling about some bra-chor. "
         "It reminded me that mere bhi kuchh kachhe chori hue hai please lauta dena."
